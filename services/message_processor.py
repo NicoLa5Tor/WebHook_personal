@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 from .whatsapp_service import WhatsAppService
 from .websocket_service import WebSocketService
 from .message_queue_service import MessageQueueService
+from .simple_cache import get_number_cache
 
 logger = logging.getLogger(__name__)
 
@@ -129,13 +130,52 @@ class MessageProcessor:
     def send_to_websocket(self, webhook_data: Dict):
         """Envía el JSON completo de WhatsApp al WebSocket usando el servicio dedicado con cola como respaldo"""
         try:
+            # Extraer el número de teléfono del webhook
+            from_number = None
+            if 'entry' in webhook_data:
+                for entry in webhook_data['entry']:
+                    if 'changes' in entry:
+                        for change in entry['changes']:
+                            if change.get('field') == 'messages':
+                                value = change.get('value', {})
+                                if 'messages' in value and value['messages']:
+                                    from_number = value['messages'][0].get('from')
+                                    break
+                        if from_number:
+                            break
+                    if from_number:
+                        break
+
+            # Validar cache solo si hay número de teléfono
+            if from_number:
+                cache = get_number_cache()
+                cached_data = cache.get_number(from_number)
+
+                # Agregar información del cache si está guardado
+                if cached_data:
+                    webhook_data['cached_info'] = {
+                        'name': cached_data.get('name'),
+                        'phone': cached_data.get('phone'),
+                        'data': cached_data.get('data', {}),
+                        'created_at': cached_data.get('created_at'),
+                        'updated_at': cached_data.get('updated_at')
+                    }
+                    webhook_data['save_number'] = True
+                    logger.info(f"Número {from_number} encontrado en cache - Nombre: {cached_data.get('name', 'N/A')}")
+                else:
+                    webhook_data['save_number'] = False
+                    logger.info(f"Número {from_number} NO encontrado en cache")
+            else:
+                webhook_data['save_number'] = False
+                logger.info("No se pudo extraer número de teléfono del webhook")
+
             # Usar el servicio de cola que maneja WebSocket directo y cola como respaldo
             result = self.message_queue_service.add_message_to_queue(webhook_data)
-            
+
             if result['success']:
                 logger.info(f"Webhook JSON enviado vía {result['method']}")
             else:
                 logger.error(f"Error enviando webhook: {result.get('error', 'Unknown error')}")
-                
+
         except Exception as e:
             logger.error(f"Error crítico enviando webhook al WebSocket: {str(e)}")
