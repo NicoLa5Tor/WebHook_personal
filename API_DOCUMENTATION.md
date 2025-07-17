@@ -296,6 +296,78 @@ curl -X POST http://localhost:5000/api/send-bulk-interactive \
 
 ---
 
+### 6. Envío Broadcast Personalizado
+
+**Endpoint**: `POST /api/send-personalized-broadcast`
+
+**Descripción**: Envía mensajes interactivos personalizados con encabezado, botón y pie de página común, pero con texto del cuerpo personalizado para cada destinatario.
+
+**Curl:**
+```bash
+curl -X POST http://localhost:5050/api/send-personalized-broadcast \
+-H "Content-Type: application/json" \
+-d '{
+  "recipients": [
+    {
+      "phone": "573103391854",
+      "body_text": "Hola Juan, tu pedido #12345 está listo para recoger."
+    },
+    {
+      "phone": "573103391854",
+      "body_text": "Hola María, tu pedido #67890 está listo para recoger."
+    }
+  ],
+  "header_type": "image",
+  "header_content": "https://wallpapers.com/images/featured/rust-w1oz1519t9q4fum2.jpg",
+  "button_text": "Ver Pedido",
+  "button_url": "https://mi-tienda.com/mis-pedidos",
+  "footer_text": "Gracias por tu compra - Mi Tienda",
+  "use_queue": true
+}'
+```
+
+**Input:**
+```json
+{
+  "recipients": [
+    {
+      "phone": "573103391854",
+      "body_text": "Hola Juan, tu pedido #12345 está listo para recoger."
+    },
+    {
+      "phone": "573103391854",
+      "body_text": "Hola María, tu pedido #67890 está listo para recoger."
+    }
+  ],
+  "header_type": "image",
+  "header_content": "https://wallpapers.com/images/featured/rust-w1oz1519t9q4fum2.jpg",
+  "button_text": "Ver Pedido",
+  "button_url": "https://mi-tienda.com/mis-pedidos",
+  "footer_text": "Gracias por tu compra - Mi Tienda",
+  "use_queue": true
+}
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Broadcast personalizado enviado a cola",
+  "task_id": "7cb518bd-a492-4f97-b7fa-414ea2ce20fe"
+}
+```
+
+**Características:**
+- ✅ **Encabezado común**: Mismo header para todos los destinatarios
+- ✅ **Texto personalizado**: Cada destinatario recibe un mensaje único
+- ✅ **Botón común**: Mismo botón para todos (o URLs personalizadas)
+- ✅ **Pie de página común**: Mismo footer para todos
+- ✅ **Soporte multimedia**: Imágenes, videos, documentos en el header
+- ✅ **Cola asíncrona**: Procesamiento en background con Celery
+- ✅ **Reintentos automáticos**: Hasta 3 intentos en caso de error
+
+---
+
 ### 6. Broadcast Interactivo
 
 **Endpoint**: `POST /api/send-broadcast-interactive`
@@ -343,7 +415,261 @@ curl -X POST http://localhost:5000/api/send-broadcast-interactive \
 
 ---
 
-### 7. Estado de Tarea
+### 7. Broadcast Personalizado
+
+**Endpoint**: `POST /api/send-personalized-broadcast`
+
+**Descripción**: Envía mensajes interactivos personalizados con texto individual para cada destinatario pero manteniendo el mismo header, botón y footer.
+
+**Curl:**
+```bash
+curl -X POST http://localhost:5000/api/send-personalized-broadcast \
+-H "Content-Type: application/json" \
+-d '{
+  "recipients": [
+    {
+      "phone": "573123456789",
+      "body_text": "Hola Juan, tu pedido #12345 está listo para recoger."
+    },
+    {
+      "phone": "573987654321",
+      "body_text": "Hola María, tu pedido #67890 está listo para recoger."
+    },
+    {
+      "phone": "573555666777",
+      "body_text": "Hola Pedro, tu pedido #54321 está listo para recoger."
+    }
+  ],
+  "header_type": "text",
+  "header_content": "Notificación de Pedido",
+  "button_text": "Ver Pedido",
+  "button_url": "https://mi-tienda.com/mis-pedidos",
+  "footer_text": "Gracias por tu compra - Mi Tienda",
+  "use_queue": true
+}'
+```
+
+**Input:**
+```json
+{
+  "recipients": [
+    {
+      "phone": "573123456789",
+      "body_text": "Hola Juan, tu pedido #12345 está listo para recoger."
+    },
+    {
+      "phone": "573987654321",
+      "body_text": "Hola María, tu pedido #67890 está listo para recoger."
+    }
+  ],
+  "header_type": "text",
+  "header_content": "Notificación de Pedido",
+  "button_text": "Ver Pedido",
+  "button_url": "https://mi-tienda.com/mis-pedidos",
+  "footer_text": "Gracias por tu compra - Mi Tienda",
+  "use_queue": true
+}
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Broadcast personalizado enviado a cola",
+  "task_id": "12345678-1234-1234-1234-123456789abc"
+}
+```
+
+**Output (Sin Cola):**
+```json
+{
+  "success": true,
+  "message": "Broadcast personalizado procesado",
+  "result": {
+    "total": 2,
+    "successful": 2,
+    "failed": 0,
+    "errors": []
+  }
+}
+```
+
+**Campos requeridos:**
+- `recipients`: Array de destinatarios con phone y body_text personalizado
+- `recipients[].phone`: Número de teléfono del destinatario
+- `recipients[].body_text`: Texto personalizado para cada destinatario
+
+**Campos opcionales:**
+- `header_type`: Tipo de header (text, image, video, document)
+- `header_content`: Contenido del header
+- `button_text`: Texto del botón
+- `button_url`: URL del botón
+- `footer_text`: Texto del pie de página
+- `use_queue`: Si usar cola (true/false, default: true)
+
+**Diferencias con otros endpoints:**
+- **vs send-broadcast-interactive**: Permite texto personalizado por destinatario
+- **vs send-bulk-interactive**: Reutiliza media y optimiza para el mismo header/footer
+- **Optimización**: Si se usa media (imagen/video), se sube una sola vez y se reutiliza
+
+---
+
+### 8. Enviar Mensaje de Lista
+
+**Endpoint**: `POST /api/send-list`
+
+**Descripción**: Envía un mensaje interactivo de lista con opciones seleccionables.
+
+**Curl:**
+```bash
+curl -X POST http://localhost:5000/api/send-list \
+-H "Content-Type: application/json" \
+-d '{
+  "phone": "573123456789",
+  "header_text": "Servicios disponibles",
+  "body_text": "Selecciona el servicio que necesitas:",
+  "footer_text": "ECOES - Atención al cliente",
+  "button_text": "Ver servicios",
+  "sections": [
+    {
+      "title": "Servicios técnicos",
+      "rows": [
+        {
+          "id": "soporte_tecnico",
+          "title": "Soporte técnico",
+          "description": "Ayuda con problemas técnicos"
+        },
+        {
+          "id": "mantenimiento",
+          "title": "Mantenimiento",
+          "description": "Solicitar mantenimiento preventivo"
+        }
+      ]
+    },
+    {
+      "title": "Servicios comerciales",
+      "rows": [
+        {
+          "id": "ventas",
+          "title": "Ventas",
+          "description": "Información sobre productos"
+        },
+        {
+          "id": "facturacion",
+          "title": "Facturación",
+          "description": "Consultas sobre facturas"
+        }
+      ]
+    }
+  ]
+}'
+```
+
+**Input:**
+```json
+{
+  "phone": "573123456789",
+  "header_text": "Servicios disponibles",
+  "body_text": "Selecciona el servicio que necesitas:",
+  "footer_text": "ECOES - Atención al cliente",
+  "button_text": "Ver servicios",
+  "sections": [
+    {
+      "title": "Servicios técnicos",
+      "rows": [
+        {
+          "id": "soporte_tecnico",
+          "title": "Soporte técnico",
+          "description": "Ayuda con problemas técnicos"
+        },
+        {
+          "id": "mantenimiento",
+          "title": "Mantenimiento",
+          "description": "Solicitar mantenimiento preventivo"
+        }
+      ]
+    },
+    {
+      "title": "Servicios comerciales",
+      "rows": [
+        {
+          "id": "ventas",
+          "title": "Ventas",
+          "description": "Información sobre productos"
+        },
+        {
+          "id": "facturacion",
+          "title": "Facturación",
+          "description": "Consultas sobre facturas"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Mensaje de lista enviado exitosamente",
+  "data": {
+    "messaging_product": "whatsapp",
+    "contacts": [
+      {
+        "input": "573123456789",
+        "wa_id": "573123456789"
+      }
+    ],
+    "messages": [
+      {
+        "id": "wamid.HBgLNTczMTIzNDU2Nzg5FQIAEhggNjA2N0E2OEI3RjVBNEE2QjlBNjY2RjA5NkY0N0VBRkYA"
+      }
+    ]
+  }
+}
+```
+
+**Output (Error):**
+```json
+{
+  "success": false,
+  "error": "Se requiere el campo 'phone'"
+}
+```
+
+**Campos requeridos:**
+- `phone`: Número de teléfono del destinatario
+- `header_text`: Texto del encabezado
+- `body_text`: Texto del cuerpo del mensaje
+- `footer_text`: Texto del pie de página
+- `button_text`: Texto del botón para desplegar la lista
+- `sections`: Array de secciones con opciones
+
+**Estructura de sections:**
+```json
+{
+  "title": "Título de la sección",
+  "rows": [
+    {
+      "id": "identificador_único",
+      "title": "Título de la opción",
+      "description": "Descripción opcional de la opción"
+    }
+  ]
+}
+```
+
+**Limitaciones:**
+- Máximo 10 secciones por mensaje
+- Máximo 10 filas por sección
+- El `id` de cada fila debe ser único dentro del mensaje
+- Los títulos deben tener máximo 24 caracteres
+- Las descripciones deben tener máximo 72 caracteres
+
+---
+
+### 8. Estado de Tarea
 
 **Endpoint**: `GET /api/task-status/{task_id}`
 
@@ -371,7 +697,7 @@ curl -X GET http://localhost:5000/api/task-status/12345678-1234-1234-1234-123456
 
 ---
 
-### 8. Obtener Media
+### 9. Obtener Media
 
 **Endpoint**: `GET /api/media/{media_id}`
 
@@ -394,7 +720,7 @@ curl -X GET http://localhost:5000/api/media/123456789
 
 ## 🗂️ Endpoints de Cache
 
-### 9. Obtener Todos los Números
+### 10. Obtener Todos los Números
 
 **Endpoint**: `GET /api/numbers`
 
@@ -427,7 +753,7 @@ curl -X GET http://localhost:5000/api/numbers
 
 ---
 
-### 10. Obtener Número Específico
+### 11. Obtener Número Específico
 
 **Endpoint**: `GET /api/numbers/{phone}`
 
@@ -465,7 +791,7 @@ curl -X GET http://localhost:5000/api/numbers/573123456789
 
 ---
 
-### 11. Agregar Número
+### 12. Agregar Número
 
 **Endpoint**: `POST /api/numbers`
 
@@ -509,7 +835,7 @@ curl -X POST http://localhost:5000/api/numbers \
 
 ---
 
-### 12. Eliminar Número
+### 13. Eliminar Número
 
 **Endpoint**: `DELETE /api/numbers/{phone}`
 
@@ -538,7 +864,7 @@ curl -X DELETE http://localhost:5000/api/numbers/573123456789
 
 ---
 
-### 13. Limpiar Cache
+### 14. Limpiar Cache
 
 **Endpoint**: `POST /api/numbers/clear`
 
@@ -562,7 +888,7 @@ curl -X POST http://localhost:5000/api/numbers/clear
 
 ## 🔄 Endpoints de Cola de Mensajes
 
-### 14. Estado de Cola
+### 15. Estado de Cola
 
 **Endpoint**: `GET /api/queue/status`
 
@@ -591,7 +917,7 @@ curl -X GET http://localhost:5000/api/queue/status
 
 ---
 
-### 15. Longitudes de Cola
+### 16. Longitudes de Cola
 
 **Endpoint**: `GET /api/queue/lengths`
 
@@ -614,7 +940,7 @@ curl -X GET http://localhost:5000/api/queue/lengths
 
 ---
 
-### 16. Limpiar Cola
+### 17. Limpiar Cola
 
 **Endpoint**: `DELETE /api/queue/clear`
 
@@ -637,7 +963,7 @@ curl -X DELETE http://localhost:5000/api/queue/clear
 
 ---
 
-### 17. Probar Cola
+### 18. Probar Cola
 
 **Endpoint**: `POST /api/queue/test`
 
@@ -669,7 +995,7 @@ curl -X POST http://localhost:5000/api/queue/test
 
 ## 📊 Endpoints de Estado
 
-### 18. Estado del Servicio
+### 19. Estado del Servicio
 
 **Endpoint**: `GET /api/status`
 
@@ -708,7 +1034,7 @@ curl -X GET http://localhost:5000/api/status
 
 ---
 
-### 19. Health Check
+### 20. Health Check
 
 **Endpoint**: `GET /api/health`
 
@@ -730,7 +1056,7 @@ curl -X GET http://localhost:5000/api/health
 
 ## 📨 Webhook
 
-### 20. Webhook de WhatsApp
+### 21. Webhook de WhatsApp
 
 **Endpoint**: `POST /webhook`
 

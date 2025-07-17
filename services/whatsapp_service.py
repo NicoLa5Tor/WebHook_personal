@@ -218,42 +218,109 @@ class WhatsAppService:
             logger.error(f"Excepción enviando mensaje interactivo: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def send_bulk_interactive_messages(self, recipients: List[Dict]) -> Dict:
-        """Envía mensajes interactivos masivos"""
+    def send_personalized_broadcast_messages(self, recipients: List[Dict], header_type: str = None, header_content: str = None,
+                                               button_text: str = None, button_url: str = None, footer_text: str = None) -> Dict:
+        """Envía mensajes interactivos personalizados"""
         results = {
             "total": len(recipients),
             "successful": 0,
             "failed": 0,
             "errors": []
         }
-        
-        for recipient in recipients:
+
+        # Si es base64, subir una sola vez y reutilizar el media_id
+        media_id = None
+        if header_type and header_content and header_type in ["image", "video", "document"]:
+            if not header_content.startswith(('http://', 'https://')):
+                logger.info(f"Detectado base64, subiendo archivo una sola vez...")
+                media_id = self.upload_media_from_base64(header_content, header_type)
+                if not media_id:
+                    logger.error("No se pudo subir el archivo base64")
+                    results["errors"].append("No se pudo subir el archivo base64")
+                    results["failed"] = len(recipients)
+                    return results
+
+        # Función para enviar mensaje a un solo número
+        def send_to_recipient(recipient):
             phone = recipient.get('phone')
-            header_type = recipient.get('header_type')
-            header_content = recipient.get('header_content')
             body_text = recipient.get('body_text')
-            button_text = recipient.get('button_text')
-            button_url = recipient.get('button_url')
-            footer_text = recipient.get('footer_text')
-            
+
             if not phone or not body_text:
-                results["failed"] += 1
-                results["errors"].append(f"Datos incompletos para {phone}")
-                continue
-            
+                return {"success": False, "error": "Datos incompletos para {phone}", "phone": phone}
+
+            # Usar media_id si ya se subió, o header_content original si es URL
+            final_header_content = media_id if media_id else header_content
+
             result = self.send_interactive_message(
-                phone, header_type, header_content, body_text, 
+                phone, header_type, final_header_content, body_text, 
                 button_text, button_url, footer_text
             )
-            
-            if result["success"]:
-                results["successful"] += 1
-            else:
-                results["failed"] += 1
-                results["errors"].append(f"Error para {phone}: {result['error']}")
-        
+
+            return {"success": result["success"], "error": result.get("error", ""), "phone": phone}
+
+        # Enviar mensajes simultáneamente usando ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(len(recipients), 10)) as executor:
+            # Enviar todas las tareas al pool de threads
+            future_to_recipient = {executor.submit(send_to_recipient, recipient): recipient for recipient in recipients}
+
+            # Procesar resultados conforme se completan
+            for future in as_completed(future_to_recipient):
+                recipient = future_to_recipient[future]
+                phone = recipient.get('phone')
+                try:
+                    result = future.result()
+                    if result["success"]:
+                        results["successful"] += 1
+                    else:
+                        results["failed"] += 1
+                        results["errors"].append(f"Error para {phone}: {result['error']}")
+                except Exception as exc:
+                    results["failed"] += 1
+                    results["errors"].append(f"Error para {phone}: {str(exc)}")
+
         return results
     
+    def send_list_message(self, to: str, header_text: str, body_text: str, footer_text: str, button_text: str, sections: List[Dict]) -> Dict:
+        """Envía un mensaje interactivo de lista"""
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "header": {
+                    "type": "text",
+                    "text": header_text
+                },
+                "body": {
+                    "text": body_text
+                },
+                "footer": {
+                    "text": footer_text
+                },
+                "action": {
+                    "button": button_text,
+                    "sections": sections
+                }
+            }
+        }
+        try:
+            response = requests.post(
+                self._get_url(),
+                headers=self._get_headers(),
+                json=payload
+            )
+            if response.status_code == 200:
+                logger.info(f"Mensaje de lista enviado exitosamente a {to}")
+                return {"success": True, "data": response.json()}
+            else:
+                logger.error(f"Error enviando mensaje de lista: {response.status_code} - {response.text}")
+                return {"success": False, "error": response.text}
+        except Exception as e:
+            logger.error(f"Excepción enviando mensaje de lista: {str(e)}")
+            return {"success": False, "error": str(e)}
+
     def send_broadcast_interactive_message(self, phones: List[str], header_type: str = None, header_content: str = None,
                                           body_text: str = None, button_text: str = None, button_url: str = None,
                                           footer_text: str = None) -> Dict:

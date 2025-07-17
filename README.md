@@ -91,6 +91,11 @@ python test_websocket.py
 - `POST /api/send-message` - Enviar mensaje individual
 - `POST /api/send-template` - Enviar plantilla
 - `POST /api/send-bulk` - Envío masivo
+- `POST /api/send-interactive` - Enviar mensaje interactivo
+- `POST /api/send-bulk-interactive` - Envío masivo interactivo
+- `POST /api/send-personalized-broadcast` - Broadcast personalizado con texto único por destinatario
+- `POST /api/send-broadcast-interactive` - Broadcast interactivo (mismo mensaje para todos)
+- `POST /api/send-list` - Enviar mensaje de lista
 - `GET /api/task-status/<task_id>` - Estado de tareas asíncronas
 - `GET /api/media/<media_id>` - Obtener URL de multimedia
 
@@ -123,6 +128,30 @@ curl -X POST http://localhost:5000/api/send-bulk \
       {"phone": "5491234567890", "message": "Mensaje 1"},
       {"phone": "5491234567891", "message": "Mensaje 2"}
     ]
+  }'
+```
+
+### Envío broadcast personalizado:
+```bash
+curl -X POST http://localhost:5000/api/send-personalized-broadcast \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipients": [
+      {
+        "phone": "573103391854",
+        "body_text": "Hola Juan, tu pedido #12345 está listo para recoger."
+      },
+      {
+        "phone": "573103391855",
+        "body_text": "Hola María, tu pedido #67890 está listo para recoger."
+      }
+    ],
+    "header_type": "image",
+    "header_content": "https://example.com/image.jpg",
+    "button_text": "Ver Pedido",
+    "button_url": "https://mi-tienda.com/mis-pedidos",
+    "footer_text": "Gracias por tu compra - Mi Tienda",
+    "use_queue": true
   }'
 ```
 

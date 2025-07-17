@@ -51,6 +51,11 @@ class QueueService:
         """Envía el mismo mensaje interactivo a múltiples números de forma asíncrona"""
         return send_broadcast_interactive_message_task.delay(phones, header_type, header_content, body_text, button_text, button_url, footer_text)
     
+    def send_personalized_broadcast_messages_async(self, recipients: List[Dict], header_type: str = None, header_content: str = None,
+                                                  button_text: str = None, button_url: str = None, footer_text: str = None):
+        """Envía mensajes interactivos personalizados de forma asíncrona"""
+        return send_personalized_broadcast_messages_task.delay(recipients, header_type, header_content, button_text, button_url, footer_text)
+    
     def get_task_status(self, task_id: str):
         """Obtiene el estado de una tarea"""
         result = self.celery.AsyncResult(task_id)
@@ -220,6 +225,33 @@ def send_broadcast_interactive_message_task(self, phones: List[str], header_type
         logger.error(f"Error en tarea de broadcast interactivo: {str(e)}")
         if self.request.retries < self.max_retries:
             logger.info(f"Reintentando broadcast interactivo... Intento {self.request.retries + 1}")
+            raise self.retry(countdown=60, exc=e)
+        else:
+            return {'success': False, 'error': str(e)}
+
+
+@celery_app.task(bind=True, max_retries=3)
+def send_personalized_broadcast_messages_task(self, recipients: List[Dict], header_type: str = None, header_content: str = None,
+                                             button_text: str = None, button_url: str = None, footer_text: str = None):
+    """Tarea para enviar mensajes interactivos personalizados"""
+    try:
+        # Forzar recarga de .env en el worker con path absoluto
+        from dotenv import load_dotenv
+        import os
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+        load_dotenv(env_path, override=True)  # Forzar recarga completa
+        whatsapp_service = WhatsAppService()
+        result = whatsapp_service.send_personalized_broadcast_messages(
+            recipients, header_type, header_content, button_text, button_url, footer_text
+        )
+        
+        logger.info(f"Broadcast personalizado completado: {result['successful']}/{result['total']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en tarea de broadcast personalizado: {str(e)}")
+        if self.request.retries < self.max_retries:
+            logger.info(f"Reintentando broadcast personalizado... Intento {self.request.retries + 1}")
             raise self.retry(countdown=60, exc=e)
         else:
             return {'success': False, 'error': str(e)}

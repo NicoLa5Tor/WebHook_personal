@@ -317,6 +317,92 @@ def send_bulk_interactive():
         logger.error(f"Error en envío masivo interactivo: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@messages_bp.route('/send-list', methods=['POST'])
+def send_list():
+    """Endpoint para enviar mensajes de lista"""
+    global whatsapp_service, queue_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        
+        if not data:
+            return jsonify({"error": "Se requiere un JSON con los datos del mensaje"}), 400
+        
+        # Validar parámetros requeridos
+        phone = data.get('phone')
+        header_text = data.get('header_text')
+        body_text = data.get('body_text')
+        footer_text = data.get('footer_text')
+        button_text = data.get('button_text')
+        sections = data.get('sections', [])
+        
+        if not phone:
+            return jsonify({"error": "Se requiere el campo 'phone'"}), 400
+        
+        if not header_text:
+            return jsonify({"error": "Se requiere el campo 'header_text'"}), 400
+        
+        if not body_text:
+            return jsonify({"error": "Se requiere el campo 'body_text'"}), 400
+        
+        if not footer_text:
+            return jsonify({"error": "Se requiere el campo 'footer_text'"}), 400
+        
+        if not button_text:
+            return jsonify({"error": "Se requiere el campo 'button_text'"}), 400
+        
+        if not sections or not isinstance(sections, list):
+            return jsonify({"error": "Se requiere el campo 'sections' como array"}), 400
+        
+        # Validar estructura de sections
+        for section in sections:
+            if not isinstance(section, dict):
+                return jsonify({"error": "Cada section debe ser un objeto"}), 400
+            
+            if not section.get('title'):
+                return jsonify({"error": "Cada section debe tener un 'title'"}), 400
+            
+            rows = section.get('rows', [])
+            if not rows or not isinstance(rows, list):
+                return jsonify({"error": "Cada section debe tener un array 'rows'"}), 400
+            
+            for row in rows:
+                if not isinstance(row, dict):
+                    return jsonify({"error": "Cada row debe ser un objeto"}), 400
+                
+                if not row.get('id'):
+                    return jsonify({"error": "Cada row debe tener un 'id'"}), 400
+                
+                if not row.get('title'):
+                    return jsonify({"error": "Cada row debe tener un 'title'"}), 400
+        
+        # Enviar mensaje directamente (sin cola por ahora)
+        result = whatsapp_service.send_list_message(
+            phone, header_text, body_text, footer_text, button_text, sections
+        )
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "message": "Mensaje de lista enviado exitosamente",
+                "data": result['data']
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": result['error']
+            }), 400
+        
+    except Exception as e:
+        logger.error(f"Error enviando mensaje de lista: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @messages_bp.route('/send-broadcast-interactive', methods=['POST'])
 def send_broadcast_interactive():
     """Endpoint para enviar el mismo mensaje interactivo a múltiples números"""
@@ -378,4 +464,74 @@ def send_broadcast_interactive():
         
     except Exception as e:
         logger.error(f"Error en broadcast interactive message: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@messages_bp.route('/send-personalized-broadcast', methods=['POST'])
+def send_personalized_broadcast():
+    """Endpoint para enviar mensajes interactivos personalizados (broadcast personalizado)"""
+    global whatsapp_service, queue_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        
+        if not data:
+            return jsonify({"error": "Se requiere un JSON con los datos del mensaje"}), 400
+        
+        # Validar que se proporcionen los recipients
+        recipients = data.get('recipients', [])
+        if not isinstance(recipients, list) or len(recipients) == 0:
+            return jsonify({"error": "Se requiere el campo 'recipients' con un array de destinatarios"}), 400
+        
+        # Validar estructura de recipients
+        for recipient in recipients:
+            if not isinstance(recipient, dict):
+                return jsonify({"error": "Cada recipient debe ser un objeto"}), 400
+            
+            phone = recipient.get('phone')
+            body_text = recipient.get('body_text')
+            
+            if not phone:
+                return jsonify({"error": "Cada recipient debe tener un 'phone'"}), 400
+            
+            if not body_text:
+                return jsonify({"error": "Cada recipient debe tener un 'body_text'"}), 400
+        
+        # Extraer parámetros comunes del mensaje
+        header_type = data.get('header_type')
+        header_content = data.get('header_content')
+        button_text = data.get('button_text')
+        button_url = data.get('button_url')
+        footer_text = data.get('footer_text')
+        use_queue = data.get('use_queue', True)  # Por defecto usar cola para masivos
+        
+        if use_queue and queue_service:
+            # Enviar usando cola
+            task = queue_service.send_personalized_broadcast_messages_async(
+                recipients, header_type, header_content, button_text, button_url, footer_text
+            )
+            return jsonify({
+                "success": True,
+                "message": "Broadcast personalizado enviado a cola",
+                "task_id": task.id
+            }), 200
+        else:
+            # Enviar directamente
+            result = whatsapp_service.send_personalized_broadcast_messages(
+                recipients, header_type, header_content, button_text, button_url, footer_text
+            )
+            
+            return jsonify({
+                "success": True,
+                "message": "Broadcast personalizado procesado",
+                "result": result
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en broadcast personalizado: {str(e)}")
         return jsonify({"error": str(e)}), 500

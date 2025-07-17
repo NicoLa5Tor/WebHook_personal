@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Configuración
+WEBHOOK_PORT = os.getenv('WEBHOOK_PORT')
 VERIFY_TOKEN = os.getenv('VERIFY_TOKEN', 'hola')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
@@ -36,4 +37,4 @@ def internal_error(error):
     return jsonify({"error": "Error interno del servidor"}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5050, debug=DEBUG)
+    app.run(host='0.0.0.0', port=WEBHOOK_PORT, debug=DEBUG)
