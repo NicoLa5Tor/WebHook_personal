@@ -175,7 +175,98 @@ curl -X POST http://localhost:5000/api/send-bulk \
 
 ---
 
-### 4. Enviar Mensaje Interactivo
+### 4. Envío Masivo de Mensajes de Lista
+
+**Endpoint**: `POST /api/send-bulk-list`
+
+**Descripción**: Envía mensajes de lista personalizados a múltiples números con elementos comunes y body_text personalizado.
+
+**Curl:**
+```bash
+curl -X POST http://localhost:5000/api/send-bulk-list \
+-H "Content-Type: application/json" \
+-d '{
+  "header_text": "Selecciona una opción",
+  "footer_text": "Powered by WhatsApp",
+  "button_text": "Ver opciones",
+  "sections": [
+    {
+      "title": "Servicios",
+      "rows": [
+        {"id": "1", "title": "Consulta", "description": "Información general"},
+        {"id": "2", "title": "Soporte", "description": "Ayuda técnica"}
+      ]
+    },
+    {
+      "title": "Productos",
+      "rows": [
+        {"id": "3", "title": "Producto A", "description": "Descripción del producto A"},
+        {"id": "4", "title": "Producto B", "description": "Descripción del producto B"}
+      ]
+    }
+  ],
+  "recipients": [
+    {
+      "phone": "573123456789",
+      "body_text": "¿Qué te interesa, Juan?"
+    },
+    {
+      "phone": "573987654321",
+      "body_text": "¿Qué te interesa, María?"
+    }
+  ],
+  "use_queue": true
+}'
+```
+
+**Input:**
+```json
+{
+  "header_text": "Selecciona una opción",
+  "footer_text": "Powered by WhatsApp",
+  "button_text": "Ver opciones",
+  "sections": [
+    {
+      "title": "Servicios",
+      "rows": [
+        {"id": "1", "title": "Consulta", "description": "Información general"},
+        {"id": "2", "title": "Soporte", "description": "Ayuda técnica"}
+      ]
+    },
+    {
+      "title": "Productos",
+      "rows": [
+        {"id": "3", "title": "Producto A", "description": "Descripción del producto A"},
+        {"id": "4", "title": "Producto B", "description": "Descripción del producto B"}
+      ]
+    }
+  ],
+  "recipients": [
+    {
+      "phone": "573123456789",
+      "body_text": "¿Qué te interesa, Juan?"
+    },
+    {
+      "phone": "573987654321",
+      "body_text": "¿Qué te interesa, María?"
+    }
+  ],
+  "use_queue": true
+}
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Envío masivo de listas enviado a cola",
+  "task_id": "12345678-1234-1234-1234-123456789abc"
+}
+```
+
+---
+
+### 5. Enviar Mensaje Interactivo
 
 **Endpoint**: `POST /api/send-interactive`
 
@@ -1144,3 +1235,18 @@ curl -X GET "http://localhost:5000/webhook?hub.mode=subscribe&hub.verify_token=h
 - Mensajes se procesan en orden estricto
 - Si hay error de WebSocket, se reintenta el mismo mensaje cada 5 segundos
 - La cola se detiene hasta que el mensaje con error sea exitoso
+
+### Configuración de Workers
+- **Variable de entorno**: `BULK_MAX_WORKERS` (por defecto: 10)
+- **Aplica a**: Todos los endpoints bulk (`/send-bulk`, `/send-bulk-list`, `/send-broadcast-interactive`, `/send-personalized-broadcast`)
+- **Función**: Controla cuántos mensajes se procesan simultáneamente en operaciones masivas
+- **Ejemplo**: `BULK_MAX_WORKERS=15` → procesará hasta 15 mensajes simultáneos
+- **Rendimiento**: Más workers = mayor velocidad, pero mayor uso de recursos
+- **Recomendación**: Ajustar según la capacidad del servidor y límites de la API de WhatsApp
+
+### Arquitectura de Concurrencia
+- **Celery + Redis**: Manejo de colas de tareas asíncronas
+- **ThreadPoolExecutor**: Procesamiento simultáneo dentro de cada tarea
+- **Flujo**: API → Celery → Redis → Worker → ThreadPoolExecutor (N workers) → WhatsApp API
+- **Reintentos**: Hasta 3 intentos automáticos por tarea fallida
+- **Monitoreo**: Uso de `task_id` para seguimiento de progreso

@@ -166,6 +166,107 @@ def send_bulk():
         logger.error(f"Error en envío masivo: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@messages_bp.route('/send-bulk-list', methods=['POST'])
+def send_bulk_list():
+    """Endpoint para envío masivo de mensajes de lista personalizados"""
+    global whatsapp_service, queue_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        
+        if not data:
+            return jsonify({"error": "Se requiere un JSON con los datos del mensaje"}), 400
+        
+        # Validar que se proporcionen los recipients
+        recipients = data.get('recipients', [])
+        if not isinstance(recipients, list) or len(recipients) == 0:
+            return jsonify({"error": "Se requiere el campo 'recipients' con un array de destinatarios"}), 400
+        
+        # Validar estructura de recipients
+        for recipient in recipients:
+            if not isinstance(recipient, dict):
+                return jsonify({"error": "Cada recipient debe ser un objeto"}), 400
+            
+            phone = recipient.get('phone')
+            body_text = recipient.get('body_text')
+            
+            if not phone:
+                return jsonify({"error": "Cada recipient debe tener un 'phone'"}), 400
+            
+            if not body_text:
+                return jsonify({"error": "Cada recipient debe tener un 'body_text'"}), 400
+        
+        # Extraer parámetros comunes del mensaje
+        header_text = data.get('header_text')
+        footer_text = data.get('footer_text')
+        button_text = data.get('button_text')
+        sections = data.get('sections', [])
+        use_queue = data.get('use_queue', True)  # Por defecto usar cola para masivos
+        
+        # Validar parámetros comunes requeridos
+        if not header_text:
+            return jsonify({"error": "Se requiere el campo 'header_text'"}), 400
+        if not footer_text:
+            return jsonify({"error": "Se requiere el campo 'footer_text'"}), 400
+        if not button_text:
+            return jsonify({"error": "Se requiere el campo 'button_text'"}), 400
+        if not sections or not isinstance(sections, list):
+            return jsonify({"error": "Se requiere el campo 'sections' como array"}), 400
+        
+        # Validar estructura de sections
+        for section in sections:
+            if not isinstance(section, dict):
+                return jsonify({"error": "Cada section debe ser un objeto"}), 400
+            
+            if not section.get('title'):
+                return jsonify({"error": "Cada section debe tener un 'title'"}), 400
+            
+            rows = section.get('rows', [])
+            if not rows or not isinstance(rows, list):
+                return jsonify({"error": "Cada section debe tener un array 'rows'"}), 400
+            
+            for row in rows:
+                if not isinstance(row, dict):
+                    return jsonify({"error": "Cada row debe ser un objeto"}), 400
+                
+                if not row.get('id'):
+                    return jsonify({"error": "Cada row debe tener un 'id'"}), 400
+                
+                if not row.get('title'):
+                    return jsonify({"error": "Cada row debe tener un 'title'"}), 400
+        
+        if use_queue and queue_service:
+            # Enviar usando cola
+            task = queue_service.send_bulk_list_messages_async(
+                recipients, header_text, footer_text, button_text, sections
+            )
+            return jsonify({
+                "success": True,
+                "message": "Envío masivo de listas enviado a cola",
+                "task_id": task.id
+            }), 200
+        else:
+            # Enviar directamente
+            result = whatsapp_service.send_bulk_list_messages(
+                recipients, header_text, footer_text, button_text, sections
+            )
+            
+            return jsonify({
+                "success": True,
+                "message": "Envío masivo de listas completado",
+                "result": result
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en envío masivo de listas: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @messages_bp.route('/task-status/<task_id>', methods=['GET'])
 def get_task_status(task_id):
     """Endpoint para obtener el estado de una tarea"""

@@ -41,6 +41,11 @@ class QueueService:
         """Envía un mensaje interactivo de forma asíncrona"""
         return send_interactive_message_task.delay(to, header_type, header_content, body_text, button_text, button_url, footer_text)
     
+    def send_bulk_list_messages_async(self, recipients: List[Dict], header_text: str = None, footer_text: str = None,
+                                      button_text: str = None, sections: List[Dict] = None):
+        """Envía mensajes de lista masivos de forma asíncrona"""
+        return send_bulk_list_messages_task.delay(recipients, header_text, footer_text, button_text, sections)
+    
     def send_bulk_interactive_messages_async(self, recipients: List[Dict]):
         """Envía mensajes interactivos masivos de forma asíncrona"""
         return send_bulk_interactive_messages_task.delay(recipients)
@@ -141,6 +146,31 @@ def send_template_task(self, to: str, template_name: str, language: str = "es", 
         logger.error(f"Error en tarea de envío de plantilla: {str(e)}")
         if self.request.retries < self.max_retries:
             logger.info(f"Reintentando envío de plantilla... Intento {self.request.retries + 1}")
+            raise self.retry(countdown=60, exc=e)
+        else:
+            return {'success': False, 'error': str(e)}
+
+
+@celery_app.task(bind=True, max_retries=3)
+def send_bulk_list_messages_task(self, recipients: List[Dict], header_text: str = None, footer_text: str = None,
+                                button_text: str = None, sections: List[Dict] = None):
+    """Tarea para enviar mensajes de lista masivos"""
+    try:
+        # Forzar recarga de .env en el worker con path absoluto
+        from dotenv import load_dotenv
+        import os
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+        load_dotenv(env_path, override=True)  # Forzar recarga completa
+        whatsapp_service = WhatsAppService()
+        result = whatsapp_service.send_bulk_list_messages(recipients, header_text, footer_text, button_text, sections)
+        
+        logger.info(f"Envío masivo de listas completado: {result['successful']}/{result['total']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en tarea de envío masivo de listas: {str(e)}")
+        if self.request.retries < self.max_retries:
+            logger.info(f"Reintentando envío masivo de listas... Intento {self.request.retries + 1}")
             raise self.retry(countdown=60, exc=e)
         else:
             return {'success': False, 'error': str(e)}

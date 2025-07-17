@@ -23,6 +23,13 @@ class WhatsAppService:
         if not self.phone_number_id:
             raise ValueError("PHONE_NUMBER_ID es requerido")
     
+    def _get_max_workers(self) -> int:
+        """Obtiene la cantidad máxima de workers desde .env"""
+        try:
+            return int(os.getenv('BULK_MAX_WORKERS', '10'))
+        except ValueError:
+            return 10
+    
     def _get_access_token(self) -> str:
         """Obtiene el token de acceso dinámicamente desde .env"""
         # Forzar recarga completa del .env
@@ -105,7 +112,7 @@ class WhatsAppService:
             return {"success": False, "error": str(e)}
     
     def send_bulk_messages(self, recipients: List[Dict]) -> Dict:
-        """Envía mensajes masivos"""
+        """Envía mensajes masivos de forma simultánea"""
         results = {
             "total": len(recipients),
             "successful": 0,
@@ -113,22 +120,38 @@ class WhatsAppService:
             "errors": []
         }
         
-        for recipient in recipients:
+        # Función para enviar mensaje a un solo destinatario
+        def send_to_recipient(recipient):
             phone = recipient.get('phone')
             message = recipient.get('message')
             
             if not phone or not message:
-                results["failed"] += 1
-                results["errors"].append(f"Datos incompletos para {phone}")
-                continue
+                return {"success": False, "error": "Datos incompletos", "phone": phone}
             
             result = self.send_text_message(phone, message)
             
-            if result["success"]:
-                results["successful"] += 1
-            else:
-                results["failed"] += 1
-                results["errors"].append(f"Error para {phone}: {result['error']}")
+            return {"success": result["success"], "error": result.get("error", ""), "phone": phone}
+        
+        # Enviar mensajes simultáneamente usando ThreadPoolExecutor
+        max_workers = self._get_max_workers()
+        with ThreadPoolExecutor(max_workers=min(len(recipients), max_workers)) as executor:
+            # Enviar todas las tareas al pool de threads
+            future_to_recipient = {executor.submit(send_to_recipient, recipient): recipient for recipient in recipients}
+            
+            # Procesar resultados conforme se completan
+            for future in as_completed(future_to_recipient):
+                recipient = future_to_recipient[future]
+                phone = recipient.get('phone')
+                try:
+                    result = future.result()
+                    if result["success"]:
+                        results["successful"] += 1
+                    else:
+                        results["failed"] += 1
+                        results["errors"].append(f"Error para {phone}: {result['error']}")
+                except Exception as exc:
+                    results["failed"] += 1
+                    results["errors"].append(f"Error para {phone}: {str(exc)}")
         
         return results
     
@@ -259,7 +282,8 @@ class WhatsAppService:
             return {"success": result["success"], "error": result.get("error", ""), "phone": phone}
 
         # Enviar mensajes simultáneamente usando ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=min(len(recipients), 10)) as executor:
+        max_workers = self._get_max_workers()
+        with ThreadPoolExecutor(max_workers=min(len(recipients), max_workers)) as executor:
             # Enviar todas las tareas al pool de threads
             future_to_recipient = {executor.submit(send_to_recipient, recipient): recipient for recipient in recipients}
 
@@ -278,6 +302,51 @@ class WhatsAppService:
                     results["failed"] += 1
                     results["errors"].append(f"Error para {phone}: {str(exc)}")
 
+        return results
+    
+    def send_bulk_list_messages(self, recipients: List[Dict], header_text: str = None, footer_text: str = None,
+                                button_text: str = None, sections: List[Dict] = None) -> Dict:
+        """Envía mensajes de lista masivos personalizados de forma simultánea"""
+        results = {
+            "total": len(recipients),
+            "successful": 0,
+            "failed": 0,
+            "errors": []
+        }
+        
+        # Función para enviar mensaje de lista a un solo destinatario
+        def send_list_to_recipient(recipient):
+            phone = recipient.get('phone')
+            body_text = recipient.get('body_text')
+            
+            if not phone or not body_text:
+                return {"success": False, "error": "Datos incompletos: phone y body_text son requeridos", "phone": phone}
+            
+            result = self.send_list_message(phone, header_text, body_text, footer_text, button_text, sections)
+            
+            return {"success": result["success"], "error": result.get("error", ""), "phone": phone}
+        
+        # Enviar mensajes simultáneamente usando ThreadPoolExecutor
+        max_workers = self._get_max_workers()
+        with ThreadPoolExecutor(max_workers=min(len(recipients), max_workers)) as executor:
+            # Enviar todas las tareas al pool de threads
+            future_to_recipient = {executor.submit(send_list_to_recipient, recipient): recipient for recipient in recipients}
+            
+            # Procesar resultados conforme se completan
+            for future in as_completed(future_to_recipient):
+                recipient = future_to_recipient[future]
+                phone = recipient.get('phone')
+                try:
+                    result = future.result()
+                    if result["success"]:
+                        results["successful"] += 1
+                    else:
+                        results["failed"] += 1
+                        results["errors"].append(f"Error para {phone}: {result['error']}")
+                except Exception as exc:
+                    results["failed"] += 1
+                    results["errors"].append(f"Error para {phone}: {str(exc)}")
+        
         return results
     
     def send_list_message(self, to: str, header_text: str, body_text: str, footer_text: str, button_text: str, sections: List[Dict]) -> Dict:
@@ -363,7 +432,8 @@ class WhatsAppService:
             return {"success": result["success"], "error": result.get("error", ""), "phone": phone}
         
         # Enviar mensajes simultáneamente usando ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=min(len(phones), 10)) as executor:
+        max_workers = self._get_max_workers()
+        with ThreadPoolExecutor(max_workers=min(len(phones), max_workers)) as executor:
             # Enviar todas las tareas al pool de threads
             future_to_phone = {executor.submit(send_to_phone, phone): phone for phone in phones}
             
