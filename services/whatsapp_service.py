@@ -390,6 +390,184 @@ class WhatsAppService:
             logger.error(f"Excepción enviando mensaje de lista: {str(e)}")
             return {"success": False, "error": str(e)}
 
+    def send_button_message(self, to: str, header_type: str = None, header_content: str = None,
+                           body_text: str = None, buttons: List[Dict] = None, footer_text: str = None) -> Dict:
+        """Envía un mensaje con botones de respuesta"""
+        
+        if not buttons or len(buttons) == 0:
+            return {"success": False, "error": "Se requiere al menos un botón"}
+        
+        if len(buttons) > 3:
+            return {"success": False, "error": "Máximo 3 botones permitidos"}
+        
+        # Validar estructura de botones
+        for i, button in enumerate(buttons):
+            if not isinstance(button, dict):
+                return {"success": False, "error": f"Botón {i+1} debe ser un objeto"}
+            
+            if not button.get('id'):
+                return {"success": False, "error": f"Botón {i+1} debe tener un 'id'"}
+            
+            if not button.get('title'):
+                return {"success": False, "error": f"Botón {i+1} debe tener un 'title'"}
+            
+            # Validar longitud del título (máximo 20 caracteres)
+            if len(button['title']) > 20:
+                return {"success": False, "error": f"Título del botón {i+1} debe tener máximo 20 caracteres"}
+        
+        # Estructura del mensaje interactivo con botones
+        interactive_data = {
+            "type": "button",
+            "body": {
+                "text": body_text or "Mensaje con botones"
+            },
+            "action": {
+                "buttons": [
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": button["id"],
+                            "title": button["title"]
+                        }
+                    } for button in buttons
+                ]
+            }
+        }
+        
+        # Agregar header si se proporciona
+        if header_type and header_content:
+            if header_type == "text":
+                interactive_data["header"] = {
+                    "type": "text",
+                    "text": header_content
+                }
+            elif header_type in ["image", "video", "document"]:
+                # Determinar si es URL o base64
+                if header_content.startswith(('http://', 'https://')):
+                    # Es una URL
+                    interactive_data["header"] = {
+                        "type": header_type,
+                        header_type: {
+                            "link": header_content
+                        }
+                    }
+                else:
+                    # Es base64 - necesitamos subirlo primero
+                    logger.info(f"Detectado base64, subiendo archivo...")
+                    media_id = self.upload_media_from_base64(header_content, header_type)
+                    
+                    if media_id:
+                        interactive_data["header"] = {
+                            "type": header_type,
+                            header_type: {
+                                "id": media_id
+                            }
+                        }
+                    else:
+                        logger.error("No se pudo subir el archivo base64")
+                        # Continuar sin header si falla el upload
+                        pass
+        
+        # Agregar footer si se proporciona
+        if footer_text:
+            interactive_data["footer"] = {
+                "text": footer_text
+            }
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "interactive",
+            "interactive": interactive_data
+        }
+        
+        try:
+            response = requests.post(
+                self._get_url(),
+                headers=self._get_headers(),
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"Mensaje con botones enviado exitosamente a {to}")
+                return {"success": True, "data": response.json()}
+            else:
+                logger.error(f"Error enviando mensaje con botones: {response.status_code} - {response.text}")
+                return {"success": False, "error": response.text}
+                
+        except Exception as e:
+            logger.error(f"Excepción enviando mensaje con botones: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def send_bulk_button_messages(self, recipients: List[Dict], header_type: str = None, header_content: str = None,
+                                 buttons: List[Dict] = None, footer_text: str = None) -> Dict:
+        """Envía mensajes con botones personalizados a múltiples números"""
+        results = {
+            "total": len(recipients),
+            "successful": 0,
+            "failed": 0,
+            "errors": []
+        }
+        
+        # Validar botones comunes
+        if not buttons or len(buttons) == 0:
+            results["errors"].append("Se requiere al menos un botón")
+            results["failed"] = len(recipients)
+            return results
+        
+        # Si es base64, subir una sola vez y reutilizar el media_id
+        media_id = None
+        if header_type and header_content and header_type in ["image", "video", "document"]:
+            if not header_content.startswith(('http://', 'https://')):
+                logger.info(f"Detectado base64, subiendo archivo una sola vez...")
+                media_id = self.upload_media_from_base64(header_content, header_type)
+                if not media_id:
+                    logger.error("No se pudo subir el archivo base64")
+                    results["errors"].append("No se pudo subir el archivo base64")
+                    results["failed"] = len(recipients)
+                    return results
+        
+        # Función para enviar mensaje a un solo destinatario
+        def send_to_recipient(recipient):
+            phone = recipient.get('phone')
+            body_text = recipient.get('body_text')
+            
+            if not phone or not body_text:
+                return {"success": False, "error": "Datos incompletos: phone y body_text son requeridos", "phone": phone}
+            
+            # Usar media_id si ya se subió, o header_content original si es URL
+            final_header_content = media_id if media_id else header_content
+            
+            result = self.send_button_message(
+                phone, header_type, final_header_content, body_text, buttons, footer_text
+            )
+            
+            return {"success": result["success"], "error": result.get("error", ""), "phone": phone}
+        
+        # Enviar mensajes simultáneamente usando ThreadPoolExecutor
+        max_workers = self._get_max_workers()
+        with ThreadPoolExecutor(max_workers=min(len(recipients), max_workers)) as executor:
+            # Enviar todas las tareas al pool de threads
+            future_to_recipient = {executor.submit(send_to_recipient, recipient): recipient for recipient in recipients}
+            
+            # Procesar resultados conforme se completan
+            for future in as_completed(future_to_recipient):
+                recipient = future_to_recipient[future]
+                phone = recipient.get('phone')
+                try:
+                    result = future.result()
+                    if result["success"]:
+                        results["successful"] += 1
+                    else:
+                        results["failed"] += 1
+                        results["errors"].append(f"Error para {phone}: {result['error']}")
+                except Exception as exc:
+                    results["failed"] += 1
+                    results["errors"].append(f"Error para {phone}: {str(exc)}")
+        
+        return results
+    
     def send_broadcast_interactive_message(self, phones: List[str], header_type: str = None, header_content: str = None,
                                           body_text: str = None, button_text: str = None, button_url: str = None,
                                           footer_text: str = None) -> Dict:

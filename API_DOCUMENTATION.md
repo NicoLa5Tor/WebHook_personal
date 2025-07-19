@@ -890,7 +890,7 @@ curl -X GET http://localhost:5000/api/numbers/573123456789
 
 **Curl:**
 ```bash
-curl -X POST http://localhost:5000/api/numbers \
+curl -X POST http://localhost:5050/api/numbers \
 -H "Content-Type: application/json" \
 -d '{
   "phone": "573123456789",

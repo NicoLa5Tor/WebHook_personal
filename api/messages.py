@@ -504,6 +504,172 @@ def send_list():
         logger.error(f"Error enviando mensaje de lista: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@messages_bp.route('/send-button', methods=['POST'])
+def send_button():
+    """Endpoint para enviar mensajes con botones de respuesta"""
+    global whatsapp_service, queue_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        phone = data.get('phone')
+        header_type = data.get('header_type')
+        header_content = data.get('header_content')
+        body_text = data.get('body_text')
+        buttons = data.get('buttons', [])
+        footer_text = data.get('footer_text')
+        use_queue = data.get('use_queue', False)
+        
+        if not phone or not body_text:
+            return jsonify({"error": "Faltan parámetros: phone y body_text son requeridos"}), 400
+        
+        if not buttons or not isinstance(buttons, list) or len(buttons) == 0:
+            return jsonify({"error": "Se requiere al menos un botón en el campo 'buttons'"}), 400
+        
+        if len(buttons) > 3:
+            return jsonify({"error": "Máximo 3 botones permitidos"}), 400
+        
+        # Validar estructura de botones
+        for i, button in enumerate(buttons):
+            if not isinstance(button, dict):
+                return jsonify({"error": f"Botón {i+1} debe ser un objeto"}), 400
+            
+            if not button.get('id'):
+                return jsonify({"error": f"Botón {i+1} debe tener un 'id'"}), 400
+            
+            if not button.get('title'):
+                return jsonify({"error": f"Botón {i+1} debe tener un 'title'"}), 400
+            
+            if len(button['title']) > 20:
+                return jsonify({"error": f"Título del botón {i+1} debe tener máximo 20 caracteres"}), 400
+        
+        if use_queue and queue_service:
+            # Enviar usando cola
+            task = queue_service.send_button_message_async(
+                phone, header_type, header_content, body_text, buttons, footer_text
+            )
+            return jsonify({
+                "success": True,
+                "message": "Mensaje con botones enviado a cola",
+                "task_id": task.id
+            }), 200
+        else:
+            # Enviar directamente
+            result = whatsapp_service.send_button_message(
+                phone, header_type, header_content, body_text, buttons, footer_text
+            )
+            
+            if result['success']:
+                return jsonify({
+                    "success": True,
+                    "message": "Mensaje con botones enviado exitosamente",
+                    "data": result['data']
+                }), 200
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": result['error']
+                }), 400
+            
+    except Exception as e:
+        logger.error(f"Error enviando mensaje con botones: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@messages_bp.route('/send-bulk-button', methods=['POST'])
+def send_bulk_button():
+    """Endpoint para envío masivo de mensajes con botones de respuesta"""
+    global whatsapp_service, queue_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        
+        if not data:
+            return jsonify({"error": "Se requiere un JSON con los datos del mensaje"}), 400
+        
+        # Validar que se proporcionen los recipients
+        recipients = data.get('recipients', [])
+        if not isinstance(recipients, list) or len(recipients) == 0:
+            return jsonify({"error": "Se requiere el campo 'recipients' con un array de destinatarios"}), 400
+        
+        # Validar estructura de recipients
+        for recipient in recipients:
+            if not isinstance(recipient, dict):
+                return jsonify({"error": "Cada recipient debe ser un objeto"}), 400
+            
+            phone = recipient.get('phone')
+            body_text = recipient.get('body_text')
+            
+            if not phone:
+                return jsonify({"error": "Cada recipient debe tener un 'phone'"}), 400
+            
+            if not body_text:
+                return jsonify({"error": "Cada recipient debe tener un 'body_text'"}), 400
+        
+        # Extraer parámetros comunes del mensaje
+        header_type = data.get('header_type')
+        header_content = data.get('header_content')
+        buttons = data.get('buttons', [])
+        footer_text = data.get('footer_text')
+        use_queue = data.get('use_queue', True)  # Por defecto usar cola para masivos
+        
+        # Validar botones comunes requeridos
+        if not buttons or not isinstance(buttons, list) or len(buttons) == 0:
+            return jsonify({"error": "Se requiere al menos un botón en el campo 'buttons'"}), 400
+        
+        if len(buttons) > 3:
+            return jsonify({"error": "Máximo 3 botones permitidos"}), 400
+        
+        # Validar estructura de botones
+        for i, button in enumerate(buttons):
+            if not isinstance(button, dict):
+                return jsonify({"error": f"Botón {i+1} debe ser un objeto"}), 400
+            
+            if not button.get('id'):
+                return jsonify({"error": f"Botón {i+1} debe tener un 'id'"}), 400
+            
+            if not button.get('title'):
+                return jsonify({"error": f"Botón {i+1} debe tener un 'title'"}), 400
+            
+            if len(button['title']) > 20:
+                return jsonify({"error": f"Título del botón {i+1} debe tener máximo 20 caracteres"}), 400
+        
+        if use_queue and queue_service:
+            # Enviar usando cola
+            task = queue_service.send_bulk_button_messages_async(
+                recipients, header_type, header_content, buttons, footer_text
+            )
+            return jsonify({
+                "success": True,
+                "message": "Envío masivo de botones enviado a cola",
+                "task_id": task.id
+            }), 200
+        else:
+            # Enviar directamente
+            result = whatsapp_service.send_bulk_button_messages(
+                recipients, header_type, header_content, buttons, footer_text
+            )
+            
+            return jsonify({
+                "success": True,
+                "message": "Envío masivo de botones completado",
+                "result": result
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en envío masivo de botones: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @messages_bp.route('/send-broadcast-interactive', methods=['POST'])
 def send_broadcast_interactive():
     """Endpoint para enviar el mismo mensaje interactivo a múltiples números"""

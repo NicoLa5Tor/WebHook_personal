@@ -61,6 +61,16 @@ class QueueService:
         """Envía mensajes interactivos personalizados de forma asíncrona"""
         return send_personalized_broadcast_messages_task.delay(recipients, header_type, header_content, button_text, button_url, footer_text)
     
+    def send_button_message_async(self, to: str, header_type: str = None, header_content: str = None,
+                                 body_text: str = None, buttons: List[Dict] = None, footer_text: str = None):
+        """Envía un mensaje con botones de forma asíncrona"""
+        return send_button_message_task.delay(to, header_type, header_content, body_text, buttons, footer_text)
+    
+    def send_bulk_button_messages_async(self, recipients: List[Dict], header_type: str = None, header_content: str = None,
+                                       buttons: List[Dict] = None, footer_text: str = None):
+        """Envía mensajes con botones masivos de forma asíncrona"""
+        return send_bulk_button_messages_task.delay(recipients, header_type, header_content, buttons, footer_text)
+    
     def get_task_status(self, task_id: str):
         """Obtiene el estado de una tarea"""
         result = self.celery.AsyncResult(task_id)
@@ -282,6 +292,64 @@ def send_personalized_broadcast_messages_task(self, recipients: List[Dict], head
         logger.error(f"Error en tarea de broadcast personalizado: {str(e)}")
         if self.request.retries < self.max_retries:
             logger.info(f"Reintentando broadcast personalizado... Intento {self.request.retries + 1}")
+            raise self.retry(countdown=60, exc=e)
+        else:
+            return {'success': False, 'error': str(e)}
+
+
+@celery_app.task(bind=True, max_retries=3)
+def send_button_message_task(self, to: str, header_type: str = None, header_content: str = None,
+                            body_text: str = None, buttons: List[Dict] = None, footer_text: str = None):
+    """Tarea para enviar un mensaje con botones"""
+    try:
+        # Forzar recarga de .env en el worker con path absoluto
+        from dotenv import load_dotenv
+        import os
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+        load_dotenv(env_path, override=True)  # Forzar recarga completa
+        whatsapp_service = WhatsAppService()
+        result = whatsapp_service.send_button_message(
+            to, header_type, header_content, body_text, buttons, footer_text
+        )
+        
+        if result['success']:
+            logger.info(f"Mensaje con botones enviado en cola exitosamente a {to}")
+            return result
+        else:
+            logger.error(f"Error enviando mensaje con botones en cola: {result['error']}")
+            raise Exception(result['error'])
+            
+    except Exception as e:
+        logger.error(f"Error en tarea de envío de mensaje con botones: {str(e)}")
+        if self.request.retries < self.max_retries:
+            logger.info(f"Reintentando envío de mensaje con botones... Intento {self.request.retries + 1}")
+            raise self.retry(countdown=60, exc=e)
+        else:
+            return {'success': False, 'error': str(e)}
+
+
+@celery_app.task(bind=True, max_retries=3)
+def send_bulk_button_messages_task(self, recipients: List[Dict], header_type: str = None, header_content: str = None,
+                                  buttons: List[Dict] = None, footer_text: str = None):
+    """Tarea para enviar mensajes con botones masivos"""
+    try:
+        # Forzar recarga de .env en el worker con path absoluto
+        from dotenv import load_dotenv
+        import os
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+        load_dotenv(env_path, override=True)  # Forzar recarga completa
+        whatsapp_service = WhatsAppService()
+        result = whatsapp_service.send_bulk_button_messages(
+            recipients, header_type, header_content, buttons, footer_text
+        )
+        
+        logger.info(f"Envío masivo de botones completado: {result['successful']}/{result['total']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en tarea de envío masivo de botones: {str(e)}")
+        if self.request.retries < self.max_retries:
+            logger.info(f"Reintentando envío masivo de botones... Intento {self.request.retries + 1}")
             raise self.retry(countdown=60, exc=e)
         else:
             return {'success': False, 'error': str(e)}
