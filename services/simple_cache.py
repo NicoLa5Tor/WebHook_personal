@@ -35,17 +35,29 @@ class NumberCache:
             conn.close()
     
     def add_number(self, phone: str, name: str = None, data: Dict = None) -> bool:
-        """Agrega o actualiza un número"""
+        """Agrega un número. Si ya existe, elimina el registro anterior y crea uno nuevo"""
         try:
             with self.lock:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
                 
+                # Verificar si el número ya existe
+                cursor.execute('SELECT phone FROM numbers WHERE phone = ?', (phone,))
+                existing = cursor.fetchone()
+                
+                if existing:
+                    # El número ya existe, eliminarlo primero
+                    logger.info(f"Número {phone} ya existe en cache, eliminando registro anterior")
+                    cursor.execute('DELETE FROM numbers WHERE phone = ?', (phone,))
+                    logger.info(f"Registro anterior de {phone} eliminado")
+                
+                # Crear nuevo registro (siempre con timestamp actual)
                 now = datetime.now().isoformat()
                 data_str = json.dumps(data) if data else None
                 
+                logger.info(f"Creando nuevo registro para {phone}")
                 cursor.execute('''
-                    INSERT OR REPLACE INTO numbers 
+                    INSERT INTO numbers 
                     (phone, name, data, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?)
                 ''', (phone, name, data_str, now, now))
@@ -56,6 +68,23 @@ class NumberCache:
                 
         except Exception as e:
             logger.error(f"Error adding number {phone}: {str(e)}")
+            return False
+    
+    def exists(self, phone: str) -> bool:
+        """Verifica si un número existe en el cache"""
+        try:
+            with self.lock:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                cursor.execute('SELECT 1 FROM numbers WHERE phone = ? LIMIT 1', (phone,))
+                exists = cursor.fetchone() is not None
+                conn.close()
+                
+                return exists
+                
+        except Exception as e:
+            logger.error(f"Error checking if number {phone} exists: {str(e)}")
             return False
     
     def get_number(self, phone: str) -> Optional[Dict]:
@@ -139,6 +168,63 @@ class NumberCache:
         except Exception as e:
             logger.error(f"Error clearing all numbers: {str(e)}")
             return 0
+    
+    def update_number_data(self, phone: str, data_content: Dict) -> bool:
+        """Actualiza los datos de un número existente. Si una llave existe, la edita; si no existe, la agrega. Si el valor es '__DELETE__', elimina la llave"""
+        try:
+            with self.lock:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                # Obtener los datos actuales
+                cursor.execute('SELECT data FROM numbers WHERE phone = ?', (phone,))
+                row = cursor.fetchone()
+                
+                if not row:
+                    # El número no existe
+                    conn.close()
+                    return False
+                
+                # Parsear los datos existentes
+                current_data = {}
+                if row[0]:
+                    current_data = json.loads(row[0])
+                
+                # Procesar los nuevos datos (contenido extraído de data)
+                updated_data = current_data.copy()
+                
+                for key, value in data_content.items():
+                    if value == '__DELETE__':
+                        # Eliminar la llave si existe
+                        if key in updated_data:
+                            del updated_data[key]
+                            logger.info(f"Llave '{key}' eliminada del número {phone}")
+                    else:
+                        # Actualizar o agregar la llave directamente
+                        updated_data[key] = value
+                
+                # Actualizar en la base de datos
+                now = datetime.now().isoformat()
+                data_str = json.dumps(updated_data)
+                
+                cursor.execute('''
+                    UPDATE numbers 
+                    SET data = ?, updated_at = ?
+                    WHERE phone = ?
+                ''', (data_str, now, phone))
+                
+                conn.commit()
+                success = cursor.rowcount > 0
+                conn.close()
+                
+                if success:
+                    logger.info(f"Datos actualizados para número {phone}")
+                
+                return success
+                
+        except Exception as e:
+            logger.error(f"Error updating number data {phone}: {str(e)}")
+            return False
 
 # Instancia global
 _cache_instance = None

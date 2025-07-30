@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 class WhatsAppService:
     def __init__(self):
         # Solo guardamos valores que no cambian frecuentemente
-        self.phone_number_id = os.getenv('PHONE_NUMBER_ID')
         self.version = os.getenv('VERSION', 'v17.0')
         self.base_url = os.getenv('BASE_URL', 'https://graph.facebook.com')
         
-        if not self.phone_number_id:
+        # Verificar que PHONE_NUMBER_ID esté presente al inicializar
+        if not self._get_phone_number_id():
             raise ValueError("PHONE_NUMBER_ID es requerido")
     
     def _get_max_workers(self) -> int:
@@ -29,6 +29,15 @@ class WhatsAppService:
             return int(os.getenv('BULK_MAX_WORKERS', '10'))
         except ValueError:
             return 10
+    
+    def _get_phone_number_id(self) -> str:
+        """Obtiene el PHONE_NUMBER_ID dinámicamente desde .env"""
+        # Forzar recarga completa del .env
+        load_dotenv(override=True)  # override=True fuerza recargar
+        phone_number_id = os.getenv('PHONE_NUMBER_ID')
+        if not phone_number_id:
+            raise ValueError("PHONE_NUMBER_ID es requerido")
+        return phone_number_id
     
     def _get_access_token(self) -> str:
         """Obtiene el token de acceso dinámicamente desde .env"""
@@ -46,7 +55,7 @@ class WhatsAppService:
         }
     
     def _get_url(self) -> str:
-        return f"{self.base_url}/{self.version}/{self.phone_number_id}/messages"
+        return f"{self.base_url}/{self.version}/{self._get_phone_number_id()}/messages"
     
     def send_text_message(self, to: str, message: str) -> Dict:
         """Envía un mensaje de texto"""
@@ -656,7 +665,7 @@ class WhatsAppService:
             file_data = base64.b64decode(base64_part)
             
             # URL para subir media
-            upload_url = f"{self.base_url}/{self.version}/{self.phone_number_id}/media"
+            upload_url = f"{self.base_url}/{self.version}/{self._get_phone_number_id()}/media"
             
             # Headers para upload (sin Content-Type json)
             headers = {
@@ -682,6 +691,42 @@ class WhatsAppService:
         except Exception as e:
             logger.error(f"Excepción subiendo media: {str(e)}")
             return None
+    
+    def send_location_request_message(self, to: str, body_text: str) -> Dict:
+        """Envía un mensaje de solicitud de ubicación"""
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "type": "interactive",
+            "to": to,
+            "interactive": {
+                "type": "location_request_message",
+                "body": {
+                    "text": body_text
+                },
+                "action": {
+                    "name": "send_location"
+                }
+            }
+        }
+        
+        try:
+            response = requests.post(
+                self._get_url(),
+                headers=self._get_headers(),
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"Solicitud de ubicación enviada exitosamente a {to}")
+                return {"success": True, "data": response.json()}
+            else:
+                logger.error(f"Error enviando solicitud de ubicación: {response.status_code} - {response.text}")
+                return {"success": False, "error": response.text}
+                
+        except Exception as e:
+            logger.error(f"Excepción enviando solicitud de ubicación: {str(e)}")
+            return {"success": False, "error": str(e)}
     
     def get_media_url(self, media_id: str) -> Optional[str]:
         """Obtiene la URL de un archivo multimedia"""

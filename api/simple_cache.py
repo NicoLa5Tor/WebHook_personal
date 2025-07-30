@@ -42,9 +42,85 @@ def get_number(phone: str):
         logger.error(f"Error getting number: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@simple_cache_bp.route('/numbers/<phone>', methods=['PATCH'])
+def update_number_cache(phone: str):
+    """Actualiza los datos de un número en el cache"""
+    try:
+        cache = get_number_cache()
+        data = request.json
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        success = cache.update_number_data(phone, data)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Data for number {phone} updated successfully"
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Number not found"
+            }), 404
+    except Exception as e:
+        logger.error(f"Error updating number: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@simple_cache_bp.route('/numbers/update', methods=['PATCH'])
+def update_number_cache_body():
+    """Actualiza los datos de un número en el cache (phone en el body)"""
+    try:
+        cache = get_number_cache()
+        request_data = request.json
+        
+        if not request_data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        phone = request_data.get('phone')
+        if not phone:
+            return jsonify({"error": "Phone number is required"}), 400
+        
+        data = request_data.get('data')
+        if not data:
+            return jsonify({"error": "Data object is required"}), 400
+        
+        success = cache.update_number_data(phone, data)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Data for number {phone} updated successfully"
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Number not found"
+            }), 404
+    except Exception as e:
+        logger.error(f"Error updating number: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@simple_cache_bp.route('/numbers/<phone>/exists', methods=['GET'])
+def check_number_exists(phone: str):
+    """Verifica si un número existe en el cache"""
+    try:
+        cache = get_number_cache()
+        exists = cache.exists(phone)
+        
+        return jsonify({
+            "success": True,
+            "exists": exists,
+            "phone": phone
+        }), 200
+    except Exception as e:
+        logger.error(f"Error checking number existence: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @simple_cache_bp.route('/numbers', methods=['POST'])
 def add_number():
-    """Agrega un número"""
+    """Agrega un número. Si ya existía, elimina el anterior y crea uno nuevo"""
     try:
         data = request.json
         phone = data.get('phone')
@@ -55,13 +131,25 @@ def add_number():
             return jsonify({"error": "Phone number is required"}), 400
         
         cache = get_number_cache()
+        
+        # Verificar si el número ya existe antes de agregarlo
+        existed_before = cache.exists(phone)
         success = cache.add_number(phone, name, number_data)
         
         if success:
+            if existed_before:
+                message = f"Number {phone} existed before, old record deleted and new one created"
+                action = "recreated"
+            else:
+                message = f"Number {phone} created successfully"
+                action = "created"
+            
             return jsonify({
                 "success": True,
-                "message": f"Number {phone} added successfully"
-            }), 201
+                "action": action,
+                "message": message,
+                "existed_before": existed_before
+            }), 201  # Siempre 201 porque siempre se crea un registro nuevo
         else:
             return jsonify({
                 "success": False,

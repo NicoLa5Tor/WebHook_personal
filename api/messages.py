@@ -286,6 +286,43 @@ def get_task_status(task_id):
         logger.error(f"Error obteniendo estado de tarea: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@messages_bp.route('/send-location-request', methods=['POST'])
+def send_location_request():
+    """Endpoint para enviar mensaje de solicitud de ubicación"""
+    global whatsapp_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        phone = data.get('phone')
+        body_text = data.get('body_text')
+        
+        if not phone or not body_text:
+            return jsonify({"error": "Faltan parámetros: phone y body_text son requeridos"}), 400
+        
+        result = whatsapp_service.send_location_request_message(phone, body_text)
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "message": "Solicitud de ubicación enviada exitosamente",
+                "data": result['data']
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": result['error']
+            }), 400
+        
+    except Exception as e:
+        logger.error(f"Error enviando solicitud de ubicación: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @messages_bp.route('/media/<media_id>', methods=['GET'])
 def get_media(media_id):
     """Endpoint para obtener URL de contenido multimedia"""

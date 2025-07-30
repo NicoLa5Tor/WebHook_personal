@@ -1,4 +1,4 @@
-# API WhatsApp - Documentación de Endpoints
+c# API WhatsApp - Documentación de Endpoints
 
 ## Información General
 
@@ -844,7 +844,49 @@ curl -X GET http://localhost:5000/api/numbers
 
 ---
 
-### 11. Obtener Número Específico
+### 11. Actualizar Datos de un Número
+
+**Endpoint**: `PATCH /api/numbers/{phone}`
+
+**Descripción**: Actualiza los datos de un número específico en el cache.
+
+**Curl:**
+```bash
+curl -X PATCH http://localhost:5000/api/numbers/573123456789 \
+-H "Content-Type: application/json" \
+-d '{
+  "email": "nuevo_email@example.com",
+  "company": "Nueva Empresa"
+}'
+```
+
+**Input:**
+```json
+{
+  "email": "nuevo_email@example.com",
+  "company": "Nueva Empresa"
+}
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Data for number 573123456789 updated successfully"
+}
+```
+
+**Output (No encontrado):**
+```json
+{
+  "success": false,
+  "message": "Number not found"
+}
+```
+
+---
+
+### 12. Obtener Número Específico
 
 **Endpoint**: `GET /api/numbers/{phone}`
 
@@ -882,7 +924,7 @@ curl -X GET http://localhost:5000/api/numbers/573123456789
 
 ---
 
-### 12. Agregar Número
+### 13. Agregar Número
 
 **Endpoint**: `POST /api/numbers`
 
@@ -926,7 +968,7 @@ curl -X POST http://localhost:5050/api/numbers \
 
 ---
 
-### 13. Eliminar Número
+### 14. Eliminar Número
 
 **Endpoint**: `DELETE /api/numbers/{phone}`
 
@@ -955,7 +997,7 @@ curl -X DELETE http://localhost:5000/api/numbers/573123456789
 
 ---
 
-### 14. Limpiar Cache
+### 15. Limpiar Cache
 
 **Endpoint**: `POST /api/numbers/clear`
 
@@ -979,7 +1021,7 @@ curl -X POST http://localhost:5000/api/numbers/clear
 
 ## 🔄 Endpoints de Cola de Mensajes
 
-### 15. Estado de Cola
+### 16. Estado de Cola
 
 **Endpoint**: `GET /api/queue/status`
 
@@ -1008,7 +1050,7 @@ curl -X GET http://localhost:5000/api/queue/status
 
 ---
 
-### 16. Longitudes de Cola
+### 17. Longitudes de Cola
 
 **Endpoint**: `GET /api/queue/lengths`
 
@@ -1031,7 +1073,7 @@ curl -X GET http://localhost:5000/api/queue/lengths
 
 ---
 
-### 17. Limpiar Cola
+### 18. Limpiar Cola
 
 **Endpoint**: `DELETE /api/queue/clear`
 
@@ -1054,7 +1096,7 @@ curl -X DELETE http://localhost:5000/api/queue/clear
 
 ---
 
-### 18. Probar Cola
+### 19. Probar Cola
 
 **Endpoint**: `POST /api/queue/test`
 
@@ -1086,7 +1128,7 @@ curl -X POST http://localhost:5000/api/queue/test
 
 ## 📊 Endpoints de Estado
 
-### 19. Estado del Servicio
+### 20. Estado del Servicio
 
 **Endpoint**: `GET /api/status`
 
@@ -1110,6 +1152,8 @@ curl -X GET http://localhost:5000/api/status
 }
 ```
 
+
+573103391854
 **Output (Degradado):**
 ```json
 {
@@ -1125,7 +1169,7 @@ curl -X GET http://localhost:5000/api/status
 
 ---
 
-### 20. Health Check
+### 21. Health Check
 
 **Endpoint**: `GET /api/health`
 
@@ -1147,7 +1191,7 @@ curl -X GET http://localhost:5000/api/health
 
 ## 📨 Webhook
 
-### 21. Webhook de WhatsApp
+### 22. Webhook de WhatsApp
 
 **Endpoint**: `POST /webhook`
 
