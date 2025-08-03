@@ -180,6 +180,89 @@ def delete_number(phone: str):
         logger.error(f"Error deleting number: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@simple_cache_bp.route('/numbers/bulk-update', methods=['PATCH'])
+def bulk_update_numbers():
+    """Actualiza los datos de múltiples números en el cache de manera simultánea"""
+    try:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import os
+        
+        cache = get_number_cache()
+        request_data = request.json
+        
+        if not request_data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        phones = request_data.get('phones')
+        if not phones or not isinstance(phones, list):
+            return jsonify({"error": "phones list is required"}), 400
+        
+        data = request_data.get('data')
+        if not data:
+            return jsonify({"error": "Data object is required"}), 400
+        
+        # Función para actualizar un solo número
+        def update_single_number(phone):
+            try:
+                success = cache.update_number_data(phone, data)
+                return {
+                    "phone": phone,
+                    "success": success,
+                    "error": None if success else "Number not found"
+                }
+            except Exception as e:
+                return {
+                    "phone": phone,
+                    "success": False,
+                    "error": str(e)
+                }
+        
+        # Resultados de la operación bulk
+        results = {
+            "total": len(phones),
+            "successful": 0,
+            "failed": 0,
+            "details": []
+        }
+        
+        # Obtener número máximo de workers desde variable de entorno
+        max_workers = int(os.getenv('BULK_MAX_WORKERS', 10))
+        
+        # Procesar actualizaciones simultáneamente usando ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(len(phones), max_workers)) as executor:
+            # Enviar todas las tareas al pool de threads
+            future_to_phone = {executor.submit(update_single_number, phone): phone for phone in phones}
+            
+            # Procesar resultados conforme se completan
+            for future in as_completed(future_to_phone):
+                try:
+                    result = future.result()
+                    results["details"].append(result)
+                    
+                    if result["success"]:
+                        results["successful"] += 1
+                    else:
+                        results["failed"] += 1
+                        
+                except Exception as exc:
+                    phone = future_to_phone[future]
+                    results["details"].append({
+                        "phone": phone,
+                        "success": False,
+                        "error": f"Exception: {str(exc)}"
+                    })
+                    results["failed"] += 1
+        
+        return jsonify({
+            "success": True,
+            "message": f"Bulk update completed: {results['successful']} successful, {results['failed']} failed",
+            "results": results
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error in bulk update: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 @simple_cache_bp.route('/numbers/clear', methods=['POST'])
 def clear_numbers():
     """Limpia todos los números"""

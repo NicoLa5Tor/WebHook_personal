@@ -997,7 +997,93 @@ curl -X DELETE http://localhost:5000/api/numbers/573123456789
 
 ---
 
-### 15. Limpiar Cache
+### 15. Actualización Masiva de Cache
+
+**Endpoint**: `PATCH /api/numbers/bulk-update`
+
+**Descripción**: Actualiza los datos de múltiples números en el cache de manera simultánea. Permite editar el mismo conjunto de datos para varios números con una sola petición, procesándolos en paralelo para máxima velocidad.
+
+**Parámetros del Body:**
+- `phones` (array): Lista de números de teléfono a actualizar
+- `data` (object): Datos a actualizar para todos los números
+
+**Curl:**
+```bash
+curl -X PATCH http://localhost:5000/api/numbers/bulk-update \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phones": ["573123456789", "573987654321", "573111222333"],
+    "data": {
+      "status": "active",
+      "last_contact": "2024-01-20",
+      "campaign": "summer_2024"
+    }
+  }'
+```
+
+**Input (JSON):**
+```json
+{
+  "phones": ["573123456789", "573987654321", "573111222333"],
+  "data": {
+    "status": "active",
+    "last_contact": "2024-01-20",
+    "campaign": "summer_2024"
+  }
+}
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Bulk update completed: 2 successful, 1 failed",
+  "results": {
+    "total": 3,
+    "successful": 2,
+    "failed": 1,
+    "details": [
+      {
+        "phone": "573123456789",
+        "success": true,
+        "error": null
+      },
+      {
+        "phone": "573987654321",
+        "success": true,
+        "error": null
+      },
+      {
+        "phone": "573111222333",
+        "success": false,
+        "error": "Number not found"
+      }
+    ]
+  }
+}
+```
+
+**Características:**
+- **Procesamiento Simultáneo**: Utiliza `ThreadPoolExecutor` para actualizar múltiples números en paralelo
+- **Configuración de Workers**: Respeta la variable de entorno `BULK_MAX_WORKERS` (por defecto: 10)
+- **Mismos Datos**: Aplica el mismo conjunto de datos a todos los números especificados
+- **Operaciones Especiales**: Soporta eliminación de llaves usando `"__DELETE__"` como valor
+- **Reporte Detallado**: Devuelve el resultado individual de cada número procesado
+
+**Ejemplo de Eliminación de Llaves:**
+```json
+{
+  "phones": ["573123456789", "573987654321"],
+  "data": {
+    "old_field": "__DELETE__",
+    "new_field": "new_value"
+  }
+}
+```
+
+---
+
+### 16. Limpiar Cache
 
 **Endpoint**: `POST /api/numbers/clear`
 
@@ -1021,7 +1107,7 @@ curl -X POST http://localhost:5000/api/numbers/clear
 
 ## 🔄 Endpoints de Cola de Mensajes
 
-### 16. Estado de Cola
+### 17. Estado de Cola
 
 **Endpoint**: `GET /api/queue/status`
 
@@ -1050,7 +1136,7 @@ curl -X GET http://localhost:5000/api/queue/status
 
 ---
 
-### 17. Longitudes de Cola
+### 18. Longitudes de Cola
 
 **Endpoint**: `GET /api/queue/lengths`
 
@@ -1073,7 +1159,7 @@ curl -X GET http://localhost:5000/api/queue/lengths
 
 ---
 
-### 18. Limpiar Cola
+### 19. Limpiar Cola
 
 **Endpoint**: `DELETE /api/queue/clear`
 
@@ -1096,7 +1182,7 @@ curl -X DELETE http://localhost:5000/api/queue/clear
 
 ---
 
-### 19. Probar Cola
+### 20. Probar Cola
 
 **Endpoint**: `POST /api/queue/test`
 
@@ -1128,7 +1214,7 @@ curl -X POST http://localhost:5000/api/queue/test
 
 ## 📊 Endpoints de Estado
 
-### 20. Estado del Servicio
+### 21. Estado del Servicio
 
 **Endpoint**: `GET /api/status`
 
@@ -1169,7 +1255,7 @@ curl -X GET http://localhost:5000/api/status
 
 ---
 
-### 21. Health Check
+### 22. Health Check
 
 **Endpoint**: `GET /api/health`
 
@@ -1191,7 +1277,7 @@ curl -X GET http://localhost:5000/api/health
 
 ## 📨 Webhook
 
-### 22. Webhook de WhatsApp
+### 23. Webhook de WhatsApp
 
 **Endpoint**: `POST /webhook`
 
@@ -1282,7 +1368,7 @@ curl -X GET "http://localhost:5000/webhook?hub.mode=subscribe&hub.verify_token=h
 
 ### Configuración de Workers
 - **Variable de entorno**: `BULK_MAX_WORKERS` (por defecto: 10)
-- **Aplica a**: Todos los endpoints bulk (`/send-bulk`, `/send-bulk-list`, `/send-broadcast-interactive`, `/send-personalized-broadcast`)
+- **Aplica a**: Todos los endpoints bulk (`/send-bulk`, `/send-bulk-list`, `/send-broadcast-interactive`, `/send-personalized-broadcast`, `/numbers/bulk-update`)
 - **Función**: Controla cuántos mensajes se procesan simultáneamente en operaciones masivas
 - **Ejemplo**: `BULK_MAX_WORKERS=15` → procesará hasta 15 mensajes simultáneos
 - **Rendimiento**: Más workers = mayor velocidad, pero mayor uso de recursos
