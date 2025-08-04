@@ -31,7 +31,7 @@ check_dependencies() {
         exit 1
     fi
     
-    if ! command -v docker-compose &> /dev/null; then
+    if ! docker compose version &> /dev/null; then
         print_error "Docker Compose no está instalado"
         exit 1
     fi
@@ -67,14 +67,14 @@ check_env_file() {
 # Construir imágenes
 build_images() {
     print_status "Construyendo imágenes Docker..."
-    docker-compose build --no-cache
+    docker compose build --no-cache
     print_status "Imágenes construidas ✓"
 }
 
 # Iniciar servicios
 start_services() {
     print_status "Iniciando servicios..."
-    docker-compose up -d
+    docker compose up -d
     print_status "Servicios iniciados ✓"
 }
 
@@ -84,11 +84,11 @@ check_services() {
     sleep 5
     
     # Verificar que los contenedores están corriendo
-    if [ $(docker-compose ps -q | wc -l) -eq 3 ]; then
+    if [ $(docker compose ps -q | wc -l) -eq 3 ]; then
         print_status "Todos los servicios están corriendo ✓"
     else
         print_error "Algunos servicios no están corriendo"
-        docker-compose ps
+        docker compose ps
         exit 1
     fi
     
@@ -100,27 +100,27 @@ check_services() {
         print_status "API está respondiendo ✓"
     else
         print_warning "API no está respondiendo, verificando logs..."
-        docker-compose logs app
+        docker compose logs app
     fi
 }
 
 # Mostrar logs
 show_logs() {
     print_status "Mostrando logs de todos los servicios..."
-    docker-compose logs -f
+    docker compose logs -f
 }
 
 # Detener servicios
 stop_services() {
     print_status "Deteniendo servicios..."
-    docker-compose down
+    docker compose down
     print_status "Servicios detenidos ✓"
 }
 
 # Limpiar todo
 clean_all() {
     print_status "Limpiando contenedores, imágenes y volúmenes..."
-    docker-compose down -v --rmi all
+    docker compose down -v --rmi all
     print_status "Limpieza completada ✓"
 }
 
@@ -151,7 +151,7 @@ main() {
             clean_all
             ;;
         "status")
-            docker-compose ps
+            docker compose ps
             ;;
         "build")
             check_dependencies
