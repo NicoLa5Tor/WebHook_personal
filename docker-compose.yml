@@ -1,6 +1,9 @@
 
 networks:
   redis_network:
+    driver: bridge
+  frontend_rescue-network:
+    external: true
 
 services:
   app:
@@ -26,6 +29,7 @@ services:
       - sqlite_data:/app/data
     networks:
       - redis_network
+      - frontend_rescue-network
     depends_on:
       redis:
         condition: service_healthy
