@@ -8,7 +8,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
-    supervisor \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar archivos de requirements primero para aprovechar el cache de Docker
@@ -23,14 +23,12 @@ RUN pip install --no-cache-dir gunicorn
 # Copiar el código de la aplicación
 COPY . .
 
-# Crear directorio para SQLite y logs
-RUN mkdir -p /app/data /var/log/supervisor /var/run
+# Crear directorio para SQLite
+RUN mkdir -p /app/data
 
 # Crear usuario no-root para seguridad
 RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app \
-    && chown -R app:app /var/log/supervisor \
-    && chown -R app:app /var/run
+    && chown -R app:app /app
 
 # Cambiar a usuario app
 USER app
@@ -38,5 +36,5 @@ USER app
 # Exponer el puerto
 EXPOSE 5050
 
-# Comando por defecto usando supervisor
-CMD ["supervisord", "-c", "supervisord.conf"]
+# Comando por defecto usando gunicorn directamente
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:app"]

@@ -29,6 +29,11 @@ preload_app = True
 max_requests = 1000
 max_requests_jitter = 50
 
+# Configuración para funcionar sin supervisord
+worker_tmp_dir = "/dev/shm"  # Usar memoria compartida para mejor rendimiento
+worker_class = "gthread"  # Mantener threads para mejor compatibilidad
+threads = 4  # Número de threads por worker
+
 # Configuración de límites
 limit_request_line = 4094
 limit_request_fields = 100
