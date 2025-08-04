@@ -17,7 +17,7 @@ services:
       - VERSION=${VERSION}
       - BASE_URL=${BASE_URL}
       - DEBUG=${DEBUG}
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://mqtt-redis-service:6379/1
       - WEBSOCKET_URL=${WEBSOCKET_URL}
       - WEBHOOK_PORT=5050
       - CACHE_DB_PATH=${CACHE_DB_PATH}
@@ -30,9 +30,6 @@ services:
     networks:
       - redis_network
       - frontend_rescue-network
-    depends_on:
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/api/health"]
       interval: 30s
@@ -52,33 +49,16 @@ services:
       - VERSION=${VERSION}
       - BASE_URL=${BASE_URL}
       - DEBUG=${DEBUG}
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://mqtt-redis-service:6379/1
       - CACHE_DB_PATH=${CACHE_DB_PATH}
       - CACHE_CLEANUP_INTERVAL=${CACHE_CLEANUP_INTERVAL}
       - BULK_MAX_WORKERS=${BULK_MAX_WORKERS}
     volumes:
       - sqlite_data:/app/data
-    depends_on:
-      redis:
-        condition: service_healthy
     networks:
       - redis_network
     restart: unless-stopped
 
-  redis:
-    image: redis:alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - redis_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    restart: unless-stopped
 
 volumes:
   sqlite_data:
