@@ -85,7 +85,13 @@ class WhatsAppService:
             return {"success": False, "error": str(e)}
     
     def send_template_message(self, to: str, template_name: str, language: str = "es", parameters: Optional[List[str]] = None) -> Dict:
-        """Envía un mensaje de plantilla"""
+        """Envía un mensaje de plantilla (método simple para compatibilidad)"""
+        return self.send_template_message_advanced(to, template_name, language, None, parameters)
+    
+    def send_template_message_advanced(self, to: str, template_name: str, language: str = "es", 
+                                     components: Optional[List[Dict]] = None, 
+                                     parameters: Optional[List[str]] = None) -> Dict:
+        """Envía un mensaje de plantilla con soporte completo para componentes"""
         payload = {
             "messaging_product": "whatsapp",
             "to": to,
@@ -96,11 +102,18 @@ class WhatsAppService:
             }
         }
         
-        if parameters:
+        # Si se proporcionan componentes avanzados, usarlos
+        if components:
+            payload["template"]["components"] = components
+        # Si solo se proporcionan parámetros simples (compatibilidad hacia atrás)
+        elif parameters:
             payload["template"]["components"] = [{
                 "type": "body",
-                "parameters": [{"type": "text", "text": param} for param in parameters]
+                "parameters": [{"type": "text", "text": str(param)} for param in parameters]
             }]
+        
+        # Log del payload para debugging
+        logger.info(f"Enviando plantilla '{template_name}' a {to} con payload: {payload}")
         
         try:
             response = requests.post(
@@ -114,6 +127,11 @@ class WhatsAppService:
                 return {"success": True, "data": response.json()}
             else:
                 logger.error(f"Error enviando plantilla: {response.status_code} - {response.text}")
+                try:
+                    error_json = response.json()
+                    logger.error(f"Detalles del error: {error_json}")
+                except:
+                    pass
                 return {"success": False, "error": response.text}
                 
         except Exception as e:
@@ -744,3 +762,91 @@ class WhatsAppService:
         except Exception as e:
             logger.error(f"Excepción obteniendo media URL: {str(e)}")
             return None
+    
+    def send_bulk_template_messages(self, recipients: List[Dict]) -> Dict:
+        """Envía plantillas masivas personalizadas de forma simultánea"""
+        results = {
+            "total": len(recipients),
+            "successful": 0,
+            "failed": 0,
+            "errors": []
+        }
+        
+        # Función para enviar plantilla a un solo destinatario
+        def send_template_to_recipient(recipient):
+            phone = recipient.get('phone')
+            template_name = recipient.get('template_name')
+            language = recipient.get('language', 'es')
+            components = recipient.get('components')
+            parameters = recipient.get('parameters')  # Compatibilidad hacia atrás
+            
+            if not phone or not template_name:
+                return {"success": False, "error": "Datos incompletos: phone y template_name son requeridos", "phone": phone}
+            
+            result = self.send_template_message_advanced(phone, template_name, language, components, parameters)
+            
+            return {"success": result["success"], "error": result.get("error", ""), "phone": phone}
+        
+        # Enviar plantillas simultáneamente usando ThreadPoolExecutor
+        max_workers = self._get_max_workers()
+        with ThreadPoolExecutor(max_workers=min(len(recipients), max_workers)) as executor:
+            # Enviar todas las tareas al pool de threads
+            future_to_recipient = {executor.submit(send_template_to_recipient, recipient): recipient for recipient in recipients}
+            
+            # Procesar resultados conforme se completan
+            for future in as_completed(future_to_recipient):
+                recipient = future_to_recipient[future]
+                phone = recipient.get('phone')
+                try:
+                    result = future.result()
+                    if result["success"]:
+                        results["successful"] += 1
+                    else:
+                        results["failed"] += 1
+                        results["errors"].append(f"Error para {phone}: {result['error']}")
+                except Exception as exc:
+                    results["failed"] += 1
+                    results["errors"].append(f"Error para {phone}: {str(exc)}")
+        
+        return results
+    
+    def send_broadcast_template_message(self, phones: List[str], template_name: str, language: str = "es",
+                                      components: Optional[List[Dict]] = None, parameters: Optional[List[str]] = None) -> Dict:
+        """Envía la misma plantilla a múltiples números de forma simultánea"""
+        results = {
+            "total": len(phones),
+            "successful": 0,
+            "failed": 0,
+            "errors": []
+        }
+        
+        # Función para enviar plantilla a un solo número
+        def send_template_to_phone(phone):
+            if not phone:
+                return {"success": False, "error": "Número vacío o inválido", "phone": phone}
+            
+            result = self.send_template_message_advanced(phone, template_name, language, components, parameters)
+            
+            return {"success": result["success"], "error": result.get("error", ""), "phone": phone}
+        
+        # Enviar plantillas simultáneamente usando ThreadPoolExecutor
+        max_workers = self._get_max_workers()
+        with ThreadPoolExecutor(max_workers=min(len(phones), max_workers)) as executor:
+            # Enviar todas las tareas al pool de threads
+            future_to_phone = {executor.submit(send_template_to_phone, phone): phone for phone in phones}
+            
+            # Procesar resultados conforme se completan
+            for future in as_completed(future_to_phone):
+                phone = future_to_phone[future]
+                try:
+                    result = future.result()
+                    if result["success"]:
+                        results["successful"] += 1
+                    else:
+                        results["failed"] += 1
+                        results["errors"].append(f"Error para {phone}: {result['error']}")
+                except Exception as exc:
+                    results["failed"] += 1
+                    results["errors"].append(f"Error para {phone}: {str(exc)}")
+        
+        return results

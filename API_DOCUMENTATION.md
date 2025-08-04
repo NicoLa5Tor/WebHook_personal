@@ -68,11 +68,11 @@ curl -X POST http://localhost:5000/api/send-message \
 
 ---
 
-### 2. Enviar Mensaje Template
+### 2. Enviar Mensaje Template (Simple)
 
 **Endpoint**: `POST /api/send-template`
 
-**Descripción**: Envía un mensaje usando plantillas aprobadas por WhatsApp.
+**Descripción**: Envía un mensaje usando plantillas aprobadas por WhatsApp (versión simple para compatibilidad).
 
 **Curl:**
 ```bash
@@ -119,6 +119,409 @@ curl -X POST http://localhost:5000/api/send-template \
   }
 }
 ```
+
+---
+
+### 2.1. Enviar Plantilla Avanzada (Unitario)
+
+**Endpoint**: `POST /api/send-template-advanced`
+
+**Descripción**: Envía una plantilla con soporte completo para componentes avanzados (header, body, footer, buttons).
+
+**Curl - Plantilla con Header de Imagen y Botones:**
+```bash
+curl -X POST http://localhost:5000/api/send-template-advanced \
+-H "Content-Type: application/json" \
+-d '{
+  "phone": "573123456789",
+  "template_name": "promotional_offer",
+  "language": "es",
+  "components": [
+    {
+      "type": "header",
+      "parameters": [
+        {
+          "type": "image",
+          "image": {
+            "link": "https://ejemplo.com/imagen-oferta.jpg"
+          }
+        }
+      ]
+    },
+    {
+      "type": "body",
+      "parameters": [
+        {
+          "type": "text",
+          "text": "Juan"
+        },
+        {
+          "type": "text",
+          "text": "50%"
+        },
+        {
+          "type": "text",
+          "text": "31 de diciembre"
+        }
+      ]
+    },
+    {
+      "type": "button",
+      "sub_type": "url",
+      "index": "0",
+      "parameters": [
+        {
+          "type": "text",
+          "text": "promocion2024"
+        }
+      ]
+    }
+  ],
+  "use_queue": false
+}'
+```
+
+**Input:**
+```json
+{
+  "phone": "573123456789",
+  "template_name": "promotional_offer",
+  "language": "es",
+  "components": [
+    {
+      "type": "header",
+      "parameters": [
+        {
+          "type": "image",
+          "image": {
+            "link": "https://ejemplo.com/imagen-oferta.jpg"
+          }
+        }
+      ]
+    },
+    {
+      "type": "body",
+      "parameters": [
+        {
+          "type": "text",
+          "text": "Juan"
+        },
+        {
+          "type": "text",
+          "text": "50%"
+        },
+        {
+          "type": "text",
+          "text": "31 de diciembre"
+        }
+      ]
+    },
+    {
+      "type": "button",
+      "sub_type": "url",
+      "index": "0",
+      "parameters": [
+        {
+          "type": "text",
+          "text": "promocion2024"
+        }
+      ]
+    }
+  ],
+  "use_queue": false
+}
+```
+
+**Curl - Plantilla Simple con Parámetros:**
+```bash
+curl -X POST http://localhost:5000/api/send-template-advanced \
+-H "Content-Type: application/json" \
+-d '{
+  "phone": "573123456789",
+  "template_name": "order_confirmation",
+  "language": "es",
+  "parameters": ["Juan", "ORD-123456", "2024-01-20"],
+  "use_queue": true
+}'
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Plantilla avanzada enviada exitosamente",
+  "data": {
+    "messaging_product": "whatsapp",
+    "contacts": [
+      {
+        "input": "573123456789",
+        "wa_id": "573123456789"
+      }
+    ],
+    "messages": [
+      {
+        "id": "wamid.HBgLNTczMTIzNDU2Nzg5FQIAEhggNjA2N0E2OEI3RjVBNEE2QjlBNjY2RjA5NkY0N0VBRkYA"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 2.2. Envío Masivo de Plantillas (Bulk)
+
+**Endpoint**: `POST /api/send-bulk-template`
+
+**Descripción**: Envía plantillas personalizadas a múltiples destinatarios. Cada destinatario puede tener su propia plantilla y parámetros.
+
+**Curl - Plantillas Mixtas:**
+```bash
+curl -X POST http://localhost:5000/api/send-bulk-template \
+-H "Content-Type: application/json" \
+-d '{
+  "recipients": [
+    {
+      "phone": "573123456789",
+      "template_name": "order_confirmation",
+      "language": "es",
+      "components": [
+        {
+          "type": "body",
+          "parameters": [
+            {"type": "text", "text": "Juan"},
+            {"type": "text", "text": "ORD-12345"},
+            {"type": "text", "text": "2024-01-20"}
+          ]
+        }
+      ]
+    },
+    {
+      "phone": "573987654321",
+      "template_name": "promotional_offer",
+      "language": "es",
+      "components": [
+        {
+          "type": "header",
+          "parameters": [
+            {
+              "type": "image",
+              "image": {"link": "https://ejemplo.com/oferta.jpg"}
+            }
+          ]
+        },
+        {
+          "type": "body",
+          "parameters": [
+            {"type": "text", "text": "María"},
+            {"type": "text", "text": "30%"}
+          ]
+        }
+      ]
+    },
+    {
+      "phone": "573555666777",
+      "template_name": "simple_hello",
+      "language": "es",
+      "parameters": ["Pedro", "ECOES"]
+    }
+  ],
+  "use_queue": true
+}'
+```
+
+**Curl - Plantillas Simples:**
+```bash
+curl -X POST http://localhost:5000/api/send-bulk-template \
+-H "Content-Type: application/json" \
+-d '{
+  "recipients": [
+    {
+      "phone": "573123456789",
+      "template_name": "hello_world",
+      "language": "es",
+      "parameters": ["Juan", "Empresa XYZ"]
+    },
+    {
+      "phone": "573987654321",
+      "template_name": "order_status",
+      "language": "es",
+      "parameters": ["María", "ORD-67890", "En camino"]
+    }
+  ],
+  "use_queue": true
+}'
+```
+
+**Input:**
+```json
+{
+  "recipients": [
+    {
+      "phone": "573123456789",
+      "template_name": "order_confirmation",
+      "language": "es",
+      "components": [
+        {
+          "type": "body",
+          "parameters": [
+            {"type": "text", "text": "Juan"},
+            {"type": "text", "text": "ORD-12345"}
+          ]
+        }
+      ]
+    },
+    {
+      "phone": "573987654321",
+      "template_name": "promotional_offer",
+      "language": "es",
+      "parameters": ["María", "30%"]
+    }
+  ],
+  "use_queue": true
+}
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Envío masivo de plantillas enviado a cola",
+  "task_id": "abc12345-1234-1234-1234-123456789def"
+}
+```
+
+**Estructura de recipients:**
+- `phone` (requerido): Número de teléfono
+- `template_name` (requerido): Nombre de la plantilla
+- `language` (opcional): Código de idioma (default: "es")
+- `components` (opcional): Componentes avanzados de la plantilla
+- `parameters` (opcional): Parámetros simples (compatibilidad hacia atrás)
+
+**Características:**
+- ✅ **Plantillas mixtas**: Cada destinatario puede usar una plantilla diferente
+- ✅ **Componentes avanzados**: Soporte completo para headers, botones, etc.
+- ✅ **Compatibilidad**: Soporta parámetros simples y componentes avanzados
+- ✅ **Procesamiento paralelo**: Utiliza workers simultáneos
+- ✅ **Cola asíncrona**: Procesamiento en background
+
+---
+
+### 2.3. Broadcast de Plantillas
+
+**Endpoint**: `POST /api/send-broadcast-template`
+
+**Descripción**: Envía la misma plantilla a múltiples números con los mismos parámetros.
+
+**Curl - Plantilla con Componentes Avanzados:**
+```bash
+curl -X POST http://localhost:5000/api/send-broadcast-template \
+-H "Content-Type: application/json" \
+-d '{
+  "phones": ["573123456789", "573987654321", "573555666777"],
+  "template_name": "promotional_campaign",
+  "language": "es",
+  "components": [
+    {
+      "type": "header",
+      "parameters": [
+        {
+          "type": "image",
+          "image": {
+            "link": "https://ejemplo.com/campana2024.jpg"
+          }
+        }
+      ]
+    },
+    {
+      "type": "body",
+      "parameters": [
+        {"type": "text", "text": "Black Friday"},
+        {"type": "text", "text": "70%"},
+        {"type": "text", "text": "29 de noviembre"}
+      ]
+    },
+    {
+      "type": "button",
+      "sub_type": "url",
+      "index": "0",
+      "parameters": [
+        {
+          "type": "text",
+          "text": "BLACKFRIDAY2024"
+        }
+      ]
+    }
+  ],
+  "use_queue": true
+}'
+```
+
+**Curl - Plantilla Simple:**
+```bash
+curl -X POST http://localhost:5000/api/send-broadcast-template \
+-H "Content-Type: application/json" \
+-d '{
+  "phones": ["573123456789", "573987654321", "573555666777"],
+  "template_name": "weekly_newsletter",
+  "language": "es",
+  "parameters": ["Semana 47", "2024", "Novedades importantes"],
+  "use_queue": true
+}'
+```
+
+**Input:**
+```json
+{
+  "phones": ["573123456789", "573987654321", "573555666777"],
+  "template_name": "promotional_campaign",
+  "language": "es",
+  "components": [
+    {
+      "type": "header",
+      "parameters": [
+        {
+          "type": "image",
+          "image": {"link": "https://ejemplo.com/campana2024.jpg"}
+        }
+      ]
+    },
+    {
+      "type": "body",
+      "parameters": [
+        {"type": "text", "text": "Black Friday"},
+        {"type": "text", "text": "70%"}
+      ]
+    }
+  ],
+  "use_queue": true
+}
+```
+
+**Output (Éxito):**
+```json
+{
+  "success": true,
+  "message": "Broadcast de plantilla enviado a cola",
+  "task_id": "def67890-5678-5678-5678-567890123abc"
+}
+```
+
+**Campos requeridos:**
+- `phones`: Array de números telefónicos
+- `template_name`: Nombre de la plantilla
+
+**Campos opcionales:**
+- `language`: Código de idioma (default: "es")
+- `components`: Componentes avanzados de la plantilla
+- `parameters`: Parámetros simples (compatibilidad hacia atrás)
+- `use_queue`: Si usar cola (default: true)
+
+**Características:**
+- ✅ **Eficiencia**: Una sola plantilla para múltiples destinatarios
+- ✅ **Optimización**: Reutiliza recursos multimedia si los hay
+- ✅ **Escalabilidad**: Ideal para campañas masivas
+- ✅ **Flexibilidad**: Soporta plantillas simples y complejas
 
 ---
 

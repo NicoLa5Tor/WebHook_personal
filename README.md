@@ -89,13 +89,19 @@ python test_websocket.py
 
 ### Mensajes
 - `POST /api/send-message` - Enviar mensaje individual
-- `POST /api/send-template` - Enviar plantilla
+- `POST /api/send-template` - Enviar plantilla (simple)
+- `POST /api/send-template-advanced` - Enviar plantilla avanzada (componentes completos)
 - `POST /api/send-bulk` - Envío masivo
+- `POST /api/send-bulk-template` - Envío masivo de plantillas personalizadas
+- `POST /api/send-broadcast-template` - Broadcast de plantillas (misma plantilla a múltiples números)
 - `POST /api/send-interactive` - Enviar mensaje interactivo
 - `POST /api/send-bulk-interactive` - Envío masivo interactivo
 - `POST /api/send-personalized-broadcast` - Broadcast personalizado con texto único por destinatario
 - `POST /api/send-broadcast-interactive` - Broadcast interactivo (mismo mensaje para todos)
 - `POST /api/send-list` - Enviar mensaje de lista
+- `POST /api/send-bulk-list` - Envío masivo de listas personalizadas
+- `POST /api/send-button` - Enviar mensaje con botones de respuesta
+- `POST /api/send-bulk-button` - Envío masivo de mensajes con botones
 - `GET /api/task-status/<task_id>` - Estado de tareas asíncronas
 - `GET /api/media/<media_id>` - Obtener URL de multimedia
 

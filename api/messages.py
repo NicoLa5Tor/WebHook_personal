@@ -839,3 +839,164 @@ def send_personalized_broadcast():
     except Exception as e:
         logger.error(f"Error en broadcast personalizado: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@messages_bp.route('/send-template-advanced', methods=['POST'])
+def send_template_advanced():
+    """Endpoint para enviar plantillas con soporte completo para componentes"""
+    global whatsapp_service, queue_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        phone = data.get('phone')
+        template_name = data.get('template_name')
+        language = data.get('language', 'es')
+        components = data.get('components')
+        parameters = data.get('parameters')  # Compatibilidad hacia atrás
+        use_queue = data.get('use_queue', False)
+        
+        if not phone or not template_name:
+            return jsonify({"error": "Faltan parámetros: phone y template_name son requeridos"}), 400
+        
+        if use_queue and queue_service:
+            # Enviar usando cola
+            task = queue_service.send_template_message_advanced_async(
+                phone, template_name, language, components, parameters
+            )
+            return jsonify({
+                "success": True,
+                "message": "Plantilla avanzada enviada a cola",
+                "task_id": task.id
+            }), 200
+        else:
+            # Enviar directamente
+            result = whatsapp_service.send_template_message_advanced(
+                phone, template_name, language, components, parameters
+            )
+            
+            if result['success']:
+                return jsonify({
+                    "success": True,
+                    "message": "Plantilla avanzada enviada exitosamente",
+                    "data": result['data']
+                }), 200
+            else:
+                return jsonify({
+                    "success": False,
+                    "error": result['error']
+                }), 400
+            
+    except Exception as e:
+        logger.error(f"Error enviando plantilla avanzada: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@messages_bp.route('/send-bulk-template', methods=['POST'])
+def send_bulk_template():
+    """Endpoint para envío masivo de plantillas personalizadas"""
+    global whatsapp_service, queue_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        recipients = data.get('recipients', [])
+        use_queue = data.get('use_queue', True)  # Por defecto usar cola para masivos
+        
+        if not recipients:
+            return jsonify({"error": "Falta parámetro: recipients es requerido"}), 400
+        
+        # Validar estructura de recipients
+        for recipient in recipients:
+            if not recipient.get('phone') or not recipient.get('template_name'):
+                return jsonify({"error": "Cada recipient debe tener 'phone' y 'template_name'"}), 400
+        
+        if use_queue and queue_service:
+            # Enviar usando cola
+            task = queue_service.send_bulk_template_messages_async(recipients)
+            return jsonify({
+                "success": True,
+                "message": "Envío masivo de plantillas enviado a cola",
+                "task_id": task.id
+            }), 200
+        else:
+            # Enviar directamente
+            result = whatsapp_service.send_bulk_template_messages(recipients)
+            
+            return jsonify({
+                "success": True,
+                "message": "Envío masivo de plantillas completado",
+                "result": result
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en envío masivo de plantillas: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@messages_bp.route('/send-broadcast-template', methods=['POST'])
+def send_broadcast_template():
+    """Endpoint para enviar la misma plantilla a múltiples números"""
+    global whatsapp_service, queue_service
+    
+    if not whatsapp_service:
+        init_services()
+    
+    try:
+        if not whatsapp_service:
+            return jsonify({"error": "Servicio no disponible"}), 500
+        
+        data = request.json
+        
+        if not data:
+            return jsonify({"error": "Se requiere un JSON con los datos del mensaje"}), 400
+        
+        # Validar que se proporcionen los números telefónicos
+        phones = data.get('phones', [])
+        if not isinstance(phones, list) or len(phones) == 0:
+            return jsonify({"error": "Se requiere el campo 'phones' con un array de números telefónicos"}), 400
+        
+        # Validar que haya al least template_name
+        template_name = data.get('template_name')
+        if not template_name:
+            return jsonify({"error": "Se requiere el campo 'template_name'"}), 400
+        
+        # Extraer parámetros de la plantilla
+        language = data.get('language', 'es')
+        components = data.get('components')
+        parameters = data.get('parameters')  # Compatibilidad hacia atrás
+        use_queue = data.get('use_queue', True)  # Por defecto usar cola para masivos
+        
+        if use_queue and queue_service:
+            # Enviar usando cola
+            task = queue_service.send_broadcast_template_message_async(
+                phones, template_name, language, components, parameters
+            )
+            return jsonify({
+                "success": True,
+                "message": "Broadcast de plantilla enviado a cola",
+                "task_id": task.id
+            }), 200
+        else:
+            # Enviar directamente
+            result = whatsapp_service.send_broadcast_template_message(
+                phones, template_name, language, components, parameters
+            )
+            
+            return jsonify({
+                "success": True,
+                "message": "Broadcast de plantilla procesado",
+                "result": result
+            }), 200
+        
+    except Exception as e:
+        logger.error(f"Error en broadcast de plantilla: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
