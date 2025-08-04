@@ -3,8 +3,9 @@ import multiprocessing
 
 # Configuración del servidor
 bind = f"0.0.0.0:{os.getenv('WEBHOOK_PORT', '5050')}"
-workers = multiprocessing.cpu_count() * 2 + 1
-worker_class = "sync"
+workers = 1  # UN SOLO WORKER para threading
+worker_class = "gthread"  # THREADED WORKER
+threads = 4  # THREADS en lugar de múltiples procesos
 worker_connections = 1000
 timeout = 30
 keepalive = 2
