@@ -148,34 +148,40 @@ class MessageProcessor:
 
             # Validar cache solo si hay número de teléfono
             if from_number:
-                cache = get_number_cache()
-                cached_data = cache.get_number(from_number)
+                try:
+                    cache = get_number_cache()
+                    cached_data = cache.get_number(from_number)
 
-                # Agregar información del cache si está guardado
-                if cached_data:
-                    webhook_data['cached_info'] = {
-                        'name': cached_data.get('name'),
-                        'phone': cached_data.get('phone'),
-                        'data': cached_data.get('data', {}),
-                        'created_at': cached_data.get('created_at'),
-                        'updated_at': cached_data.get('updated_at')
-                    }
-                    webhook_data['save_number'] = True
-                    logger.info(f"Número {from_number} encontrado en cache - Nombre: {cached_data.get('name', 'N/A')}")
-                else:
+                    # Agregar información del cache si está guardado
+                    if cached_data:
+                        webhook_data['cached_info'] = {
+                            'name': cached_data.get('name'),
+                            'phone': cached_data.get('phone'),
+                            'data': cached_data.get('data', {}),
+                            'created_at': cached_data.get('created_at'),
+                            'updated_at': cached_data.get('updated_at')
+                        }
+                        webhook_data['save_number'] = True
+                        logger.info(f"📋 Número {from_number} encontrado en cache - Nombre: {cached_data.get('name', 'N/A')}")
+                    else:
+                        webhook_data['save_number'] = False
+                        logger.info(f"📋 Número {from_number} NO encontrado en cache")
+                        
+                except Exception as cache_error:
+                    logger.error(f"❌ Error accediendo al cache: {cache_error}")
                     webhook_data['save_number'] = False
-                    logger.info(f"Número {from_number} NO encontrado en cache")
+                    webhook_data['cache_error'] = str(cache_error)
             else:
                 webhook_data['save_number'] = False
-                logger.info("No se pudo extraer número de teléfono del webhook")
+                logger.info("📋 No se pudo extraer número de teléfono del webhook")
 
             # Usar el servicio de cola que maneja WebSocket directo y cola como respaldo
             result = self.message_queue_service.add_message_to_queue(webhook_data)
 
             if result['success']:
-                logger.info(f"Webhook JSON enviado vía {result['method']}")
+                logger.info(f"✅ Webhook JSON enviado vía {result['method']}")
             else:
-                logger.error(f"Error enviando webhook: {result.get('error', 'Unknown error')}")
+                logger.error(f"❌ Error enviando webhook: {result.get('error', 'Unknown error')}")
 
         except Exception as e:
-            logger.error(f"Error crítico enviando webhook al WebSocket: {str(e)}")
+            logger.error(f"❌ Error crítico enviando webhook al WebSocket: {str(e)}")

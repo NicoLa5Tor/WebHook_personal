@@ -9,30 +9,56 @@ from threading import Lock
 logger = logging.getLogger(__name__)
 
 class NumberCache:
-    def __init__(self, db_path: str = "numbers.db"):
+    def __init__(self, db_path: str = None):
+        # Usar variable de entorno o default
+        if db_path is None:
+            db_path = os.getenv('CACHE_DB_PATH', '/app/data/cache.db')
+        
         self.db_path = db_path
         self.lock = Lock()
+        
+        # CREAR DIRECTORIO PADRE AUTOMÁTICAMENTE
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            try:
+                os.makedirs(db_dir, exist_ok=True)
+                logger.info(f"✅ Directorio creado: {db_dir}")
+            except Exception as e:
+                logger.error(f"❌ Error creando directorio {db_dir}: {e}")
+        
+        logger.info(f"🗄️ Inicializando cache en: {self.db_path}")
         self._init_db()
     
     def _init_db(self):
         """Inicializa la base de datos"""
         with self.lock:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Tabla simple para números
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS numbers (
-                    phone TEXT PRIMARY KEY,
-                    name TEXT,
-                    data TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )
-            ''')
-            
-            conn.commit()
-            conn.close()
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                # Tabla simple para números
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS numbers (
+                        phone TEXT PRIMARY KEY,
+                        name TEXT,
+                        data TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                ''')
+                
+                conn.commit()
+                conn.close()
+                
+                # Verificar que se creó correctamente
+                if os.path.exists(self.db_path):
+                    logger.info(f"✅ Base de datos cache inicializada: {self.db_path}")
+                else:
+                    logger.error(f"❌ Base de datos NO se creó: {self.db_path}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error inicializando base de datos: {e}")
+                raise
     
     def add_number(self, phone: str, name: str = None, data: Dict = None) -> bool:
         """Agrega un número. Si ya existe, elimina el registro anterior y crea uno nuevo"""
@@ -233,6 +259,12 @@ def get_number_cache() -> NumberCache:
     """Obtiene la instancia del cache de números"""
     global _cache_instance
     if _cache_instance is None:
-        db_path = os.getenv('CACHE_DB_PATH', 'numbers.db')
-        _cache_instance = NumberCache(db_path)
+        try:
+            db_path = os.getenv('CACHE_DB_PATH', '/app/data/cache.db')
+            logger.info(f"🎯 Creando cache singleton en: {db_path}")
+            _cache_instance = NumberCache(db_path)
+            logger.info("✅ Cache singleton creado exitosamente")
+        except Exception as e:
+            logger.error(f"❌ Error creando cache singleton: {e}")
+            raise
     return _cache_instance
