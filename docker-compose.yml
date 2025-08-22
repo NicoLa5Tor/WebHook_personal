@@ -1,12 +1,14 @@
 
 networks:
-  redis_network:
-    driver: bridge
+  mqtt-network:
+    external: true
+    name: mqttarisma_mqtt-network
   frontend_rescue-network:
     external: true
 
 services:
   app:
+    container_name: webhook_personal-app-1
     build:
       context: .
       dockerfile: Dockerfile
@@ -28,7 +30,7 @@ services:
     volumes:
       - sqlite_data:/app/data
     networks:
-      - redis_network
+      - mqtt-network
       - frontend_rescue-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/api/health"]
@@ -56,7 +58,7 @@ services:
     volumes:
       - sqlite_data:/app/data
     networks:
-      - redis_network
+      - mqtt-network
     restart: unless-stopped
 
 

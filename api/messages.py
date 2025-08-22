@@ -909,7 +909,7 @@ def send_bulk_template():
         
         data = request.json
         recipients = data.get('recipients', [])
-        use_queue = data.get('use_queue', True)  # Por defecto usar cola para masivos
+        use_queue = data.get('use_queue', False)  # Forzar False para evitar error EntryPoints
         
         if not recipients:
             return jsonify({"error": "Falta parámetro: recipients es requerido"}), 400
@@ -919,23 +919,24 @@ def send_bulk_template():
             if not recipient.get('phone') or not recipient.get('template_name'):
                 return jsonify({"error": "Cada recipient debe tener 'phone' y 'template_name'"}), 400
         
-        if use_queue and queue_service:
-            # Enviar usando cola
-            task = queue_service.send_bulk_template_messages_async(recipients)
-            return jsonify({
-                "success": True,
-                "message": "Envío masivo de plantillas enviado a cola",
-                "task_id": task.id
-            }), 200
-        else:
-            # Enviar directamente
-            result = whatsapp_service.send_bulk_template_messages(recipients)
-            
-            return jsonify({
-                "success": True,
-                "message": "Envío masivo de plantillas completado",
-                "result": result
-            }), 200
+        # Temporalmente deshabilitado el uso de cola debido a error EntryPoints
+        # if use_queue and queue_service:
+        #     # Enviar usando cola
+        #     task = queue_service.send_bulk_template_messages_async(recipients)
+        #     return jsonify({
+        #         "success": True,
+        #         "message": "Envío masivo de plantillas enviado a cola",
+        #         "task_id": task.id
+        #     }), 200
+        # else:
+        # Enviar directamente
+        result = whatsapp_service.send_bulk_template_messages(recipients)
+        
+        return jsonify({
+            "success": True,
+            "message": "Envío masivo de plantillas completado",
+            "result": result
+        }), 200
         
     except Exception as e:
         logger.error(f"Error en envío masivo de plantillas: {str(e)}")
