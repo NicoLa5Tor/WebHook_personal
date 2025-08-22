@@ -1,13 +1,10 @@
-version: "3.8"
-
+version: '3.8'
 networks:
   mqtt-network:
     external: true
     name: mqttarisma_mqtt-network
   frontend_rescue-network:
     external: true
-    name: frontend_rescue-network
-
 services:
   app:
     container_name: webhook_personal-app-1
@@ -21,12 +18,13 @@ services:
       - VERSION=${VERSION}
       - BASE_URL=${BASE_URL}
       - DEBUG=${DEBUG}
-      - REDIS_URL=${REDIS_URL}
+      - REDIS_URL=redis://mqtt-redis-service:6379/0
       - WEBSOCKET_URL=${WEBSOCKET_URL}
-      - WEBHOOK_PORT=${WEBHOOK_PORT}
+      - WEBHOOK_PORT=5050
       - CACHE_DB_PATH=${CACHE_DB_PATH}
       - CACHE_CLEANUP_INTERVAL=${CACHE_CLEANUP_INTERVAL}
       - BULK_MAX_WORKERS=${BULK_MAX_WORKERS}
+      - WHATSAPP_QUEUE_NAME=${WHATSAPP_QUEUE_NAME}
     ports:
       - "5050:5050"
     volumes:
@@ -35,13 +33,12 @@ services:
       - mqtt-network
       - frontend_rescue-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5050/api/health || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:5050/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     restart: unless-stopped
-
   worker:
     build:
       context: .
@@ -53,16 +50,16 @@ services:
       - VERSION=${VERSION}
       - BASE_URL=${BASE_URL}
       - DEBUG=${DEBUG}
-      - REDIS_URL=${REDIS_URL}
+      - REDIS_URL=redis://mqtt-redis-service:6379/0
       - CACHE_DB_PATH=${CACHE_DB_PATH}
       - CACHE_CLEANUP_INTERVAL=${CACHE_CLEANUP_INTERVAL}
       - BULK_MAX_WORKERS=${BULK_MAX_WORKERS}
+      - WHATSAPP_QUEUE_NAME=${WHATSAPP_QUEUE_NAME}
     volumes:
       - sqlite_data:/app/data
     networks:
       - mqtt-network
     restart: unless-stopped
-
 volumes:
   sqlite_data:
     driver: local
