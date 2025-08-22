@@ -31,6 +31,8 @@ class MessageQueueService:
         self.running = False
         self._initialized = True
         
+        logger.info("🚀 MessageQueueService inicializado")
+        
         # Iniciar procesador de cola en background SOLO UNA VEZ
         if not MessageQueueService._processor_started:
             MessageQueueService._processor_started = True
@@ -39,6 +41,30 @@ class MessageQueueService:
     def add_message_to_queue(self, message_data: Dict):
         """Añade un mensaje a la cola FIFO para procesamiento"""
         try:
+            # Extraer info básica para logging
+            from_number = "unknown"
+            message_text = "N/A"
+            
+            # Intentar extraer número y texto del webhook
+            if 'entry' in message_data:
+                for entry in message_data['entry']:
+                    if 'changes' in entry:
+                        for change in entry['changes']:
+                            if change.get('field') == 'messages':
+                                value = change.get('value', {})
+                                if 'messages' in value and value['messages']:
+                                    msg = value['messages'][0]
+                                    from_number = msg.get('from', 'unknown')
+                                    if msg.get('type') == 'text':
+                                        message_text = msg.get('text', {}).get('body', 'N/A')[:30]
+                                    else:
+                                        message_text = f"[{msg.get('type', 'unknown')}]"
+                                    break
+                        if from_number != "unknown":
+                            break
+                    if from_number != "unknown":
+                        break
+            
             # SIEMPRE añadir a la cola, nunca intentar envío directo
             message_with_timestamp = {
                 **message_data,
@@ -47,47 +73,76 @@ class MessageQueueService:
             }
             
             self.message_queue.put(message_with_timestamp)
-            logger.info(f"Mensaje añadido a cola FIFO desde {message_data.get('from', 'unknown')}")
+            logger.info(f"📩 MENSAJE AÑADIDO A COLA FIFO - de: {from_number} - texto: '{message_text}' - cola actual: {self.message_queue.qsize()}")
             
-            return {"success": True, "method": "fifo_queue"}
+            return {"success": True, "method": "webhook_fifo_queue"}
                 
         except Exception as e:
-            logger.error(f"Error crítico añadiendo mensaje a cola: {str(e)}")
+            logger.error(f"❌ Error crítico añadiendo mensaje a cola: {str(e)}")
             return {"success": False, "error": str(e)}
     
     def _start_queue_processor(self):
         """Inicia el procesador de cola en background usando threading"""
         if self.running:
+            logger.warning("⚠️ Procesador ya está corriendo")
             return
         
         try:
             self.running = True
-            self.processor_thread = threading.Thread(target=self._process_queue_loop, daemon=True)
+            self.processor_thread = threading.Thread(target=self._process_queue_loop, daemon=True, name="FIFOProcessor")
             self.processor_thread.start()
-            logger.info("Procesador de cola FIFO iniciado con threading")
+            logger.info("🎯 PROCESADOR DE COLA FIFO INICIADO CON THREADING")
+            logger.info(f"🔧 Thread ID: {self.processor_thread.ident}, Thread Name: {self.processor_thread.name}")
         except Exception as e:
-            logger.error(f"Error iniciando procesador de cola: {str(e)}")
+            logger.error(f"❌ Error iniciando procesador de cola: {str(e)}")
             self.running = False
     
     def _process_queue_loop(self):
         """Loop principal del procesador de cola FIFO - UN mensaje a la vez"""
-        logger.info("Iniciando loop de procesador FIFO - UN SOLO MENSAJE A LA VEZ")
+        logger.info("🚀 INICIANDO LOOP DE PROCESADOR FIFO - UN SOLO MENSAJE A LA VEZ")
+        logger.info("🔄 Esperando mensajes en la cola...")
         
         while self.running:
             try:
                 # Obtener mensaje de la cola FIFO (bloquea hasta que haya mensaje)
                 message_data = self.message_queue.get(timeout=1)
                 
-                logger.info(f"\n➡️ PROCESANDO MENSAJE FIFO desde {message_data.get('from', 'unknown')} - texto: '{message_data.get('text', 'N/A')}'")
+                # Extraer info para logging
+                from_number = "unknown"
+                message_text = "N/A"
+                
+                try:
+                    if 'entry' in message_data:
+                        for entry in message_data['entry']:
+                            if 'changes' in entry:
+                                for change in entry['changes']:
+                                    if change.get('field') == 'messages':
+                                        value = change.get('value', {})
+                                        if 'messages' in value and value['messages']:
+                                            msg = value['messages'][0]
+                                            from_number = msg.get('from', 'unknown')
+                                            if msg.get('type') == 'text':
+                                                message_text = msg.get('text', {}).get('body', 'N/A')[:30]
+                                            else:
+                                                message_text = f"[{msg.get('type', 'unknown')}]"
+                                            break
+                                    if from_number != "unknown":
+                                        break
+                            if from_number != "unknown":
+                                break
+                except:
+                    pass  # Si hay error extrayendo info, usar defaults
+                
+                logger.info(f"\n➡️ PROCESANDO MENSAJE FIFO - de: {from_number} - texto: '{message_text}' - cola restante: {self.message_queue.qsize()}")
                 
                 # Intentar enviar el mensaje
                 try:
                     self.websocket_service.send_message(message_data)
-                    logger.info(f"✅ MENSAJE COMPLETADO - desde {message_data.get('from', 'unknown')} - texto: '{message_data.get('text', 'N/A')}'")
+                    logger.info(f"✅ MENSAJE COMPLETADO - de: {from_number} - texto: '{message_text}'")
                     
                     # Marcar como completado
                     self.message_queue.task_done()
-                    logger.info(f"🚀 LISTO PARA SIGUIENTE MENSAJE\n")
+                    logger.info(f"🚀 LISTO PARA SIGUIENTE MENSAJE (cola: {self.message_queue.qsize()})\n")
                     
                 except Exception as e:
                     logger.error(f"❌ Error enviando mensaje por WebSocket: {str(e)}")
@@ -111,35 +166,38 @@ class MessageQueueService:
                         except queue.Empty:
                             break
                     
-                    logger.info(f"🔄 Mensaje devuelto al frente de la cola para reintento")
+                    logger.info(f"🔄 Mensaje devuelto al frente de la cola para reintento - de: {from_number}")
                     logger.info(f"⏸️ ESPERANDO 5 SEGUNDOS ANTES DE REINTENTAR...")
                     time.sleep(5)
                     # Continuar con el siguiente ciclo (que será el mismo mensaje)
                     
             except queue.Empty:
-                # No hay mensajes en la cola, continuar
+                # No hay mensajes en la cola, continuar esperando
                 continue
                 
             except Exception as e:
-                logger.error(f"Error crítico en procesador FIFO: {str(e)}")
+                logger.error(f"❌ Error crítico en procesador FIFO: {str(e)}")
                 time.sleep(5)  # Esperar antes de continuar
                 
-        logger.info("Loop de procesador FIFO terminado")
+        logger.info("🛑 Loop de procesador FIFO terminado")
     
     def stop_processor(self):
         """Detiene el procesador de cola"""
         self.running = False
         if self.processor_thread and self.processor_thread.is_alive():
             self.processor_thread.join(timeout=5)
-            logger.info("Procesador de cola detenido")
+            logger.info("🛑 Procesador de cola detenido")
     
     def get_queue_status(self) -> Dict:
         """Obtiene el estado de la cola"""
         try:
+            thread_alive = self.processor_thread.is_alive() if self.processor_thread else False
             return {
                 "websocket_available": self.websocket_service.health_check(),
                 "processor_running": self.running,
-                "processor_thread_alive": self.processor_thread.is_alive() if self.processor_thread else False,
+                "processor_thread_alive": thread_alive,
+                "processor_thread_name": self.processor_thread.name if self.processor_thread else None,
+                "queue_size": self.message_queue.qsize(),
                 "queue_healthy": True
             }
         except Exception as e:
@@ -159,21 +217,21 @@ class MessageQueueService:
     def restart_processor(self) -> Dict:
         """Reinicia el procesador de cola"""
         try:
-            logger.info("Reiniciando procesador de cola...")
+            logger.info("🔄 Reiniciando procesador de cola...")
             self.running = True
             
             # Reiniciar el thread del procesador
             if self.processor_thread and not self.processor_thread.is_alive():
-                self.processor_thread = threading.Thread(target=self._process_queue_loop, daemon=True)
+                self.processor_thread = threading.Thread(target=self._process_queue_loop, daemon=True, name="FIFOProcessor")
                 self.processor_thread.start()
-                logger.info("Procesador de cola reiniciado")
+                logger.info("✅ Procesador de cola reiniciado")
                 return {"success": True, "message": "Procesador reiniciado"}
             else:
-                logger.info("El procesador ya está corriendo")
+                logger.info("ℹ️ El procesador ya está corriendo")
                 return {"success": True, "message": "Procesador ya está corriendo"}
                 
         except Exception as e:
-            logger.error(f"Error reiniciando procesador: {str(e)}")
+            logger.error(f"❌ Error reiniciando procesador: {str(e)}")
             return {"error": str(e)}
     
     def clear_queue(self) -> Dict:
@@ -188,10 +246,17 @@ class MessageQueueService:
             except queue.Empty:
                 pass
             
-            logger.warning(f"Cola limpiada - {cleared_count} mensajes removidos")
+            logger.warning(f"🧹 Cola limpiada - {cleared_count} mensajes removidos")
             return {"cleared": cleared_count}
             
         except Exception as e:
-            logger.error(f"Error limpiando cola: {str(e)}")
+            logger.error(f"❌ Error limpiando cola: {str(e)}")
             return {"error": str(e)}
-
+    
+    def clear_all_queues(self) -> Dict:
+        """Alias para clear_queue para compatibilidad con la API"""
+        return self.clear_queue()
+    
+    def retry_failed_messages(self, limit: int = 10) -> Dict:
+        """No aplicable para FIFO queue, pero mantenemos para compatibilidad API"""
+        return {"success": True, "message": "FIFO queue reintenta automáticamente"}

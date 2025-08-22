@@ -3,7 +3,7 @@ import multiprocessing
 
 # Configuración del servidor
 bind = f"0.0.0.0:{os.getenv('WEBHOOK_PORT', '5050')}"
-workers = 1  # UN SOLO WORKER para threading
+workers = 1  # UN SOLO WORKER para threading y FIFO queue
 worker_class = "gthread"  # THREADED WORKER
 threads = 4  # THREADS en lugar de múltiples procesos
 worker_connections = 1000
@@ -25,7 +25,7 @@ loglevel = "info"
 # Configuración de procesos
 daemon = False
 reload = False
-preload_app = True
+preload_app = True  # IMPORTANTE: Cargar app una vez para FIFO queue
 max_requests = 1000
 max_requests_jitter = 50
 
@@ -40,16 +40,26 @@ limit_request_fields = 100
 limit_request_field_size = 8190
 
 def when_ready(server):
-    server.log.info("Servidor listo para recibir conexiones")
+    server.log.info("🚀 Servidor listo para recibir conexiones")
+    server.log.info("🔧 Configuración: 1 worker, 4 threads, preload_app=True")
 
 def worker_int(worker):
-    worker.log.info("Worker recibió INT o QUIT señal")
+    worker.log.info("⚠️ Worker recibió INT o QUIT señal")
 
 def pre_fork(server, worker):
-    server.log.info("Worker spawned (pid: %s)", worker.pid)
+    server.log.info("🔄 Worker spawned (pid: %s)", worker.pid)
 
 def post_fork(server, worker):
-    server.log.info("Worker spawned (pid: %s)", worker.pid)
+    worker.log.info("✅ Worker spawned (pid: %s) - FIFO queue debería iniciarse", worker.pid)
 
 def worker_abort(worker):
-    worker.log.info("Worker recibió SIGABRT señal")
+    worker.log.info("❌ Worker recibió SIGABRT señal")
+
+def on_starting(server):
+    server.log.info("🎯 Gunicorn iniciando con configuración FIFO optimizada")
+
+def on_reload(server):
+    server.log.info("🔄 Gunicorn recargando...")
+
+def pre_exec(server):
+    server.log.info("📋 Pre-exec: Preparando para ejecutar worker")
