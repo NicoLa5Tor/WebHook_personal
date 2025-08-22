@@ -111,3 +111,22 @@ def test_queue():
             "success": False,
             "error": str(e)
         }), 500
+# AGREGAR ESTE ENDPOINT AL FINAL DE api/message_queue.py
+
+@message_queue_bp.route('/queue/restart', methods=['POST'])
+def restart_queue_processor():
+    """Reinicia el procesador de cola FIFO"""
+    try:
+        result = message_queue_service.restart_processor()
+        
+        if result.get("success"):
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+        
+    except Exception as e:
+        logger.error(f"Error reiniciando procesador: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
