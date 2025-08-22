@@ -21,9 +21,9 @@ services:
       - VERSION=${VERSION}
       - BASE_URL=${BASE_URL}
       - DEBUG=${DEBUG}
-      - REDIS_URL=redis://mqtt-redis-service:6379/1
-      - WEBSOCKET_URL=ws://websocket-service:8080
-      - WEBHOOK_PORT=5050
+      - REDIS_URL=${REDIS_URL}
+      - WEBSOCKET_URL=${WEBSOCKET_URL}
+      - WEBHOOK_PORT=${WEBHOOK_PORT}
       - CACHE_DB_PATH=${CACHE_DB_PATH}
       - CACHE_CLEANUP_INTERVAL=${CACHE_CLEANUP_INTERVAL}
       - BULK_MAX_WORKERS=${BULK_MAX_WORKERS}
@@ -35,7 +35,6 @@ services:
       - mqtt-network
       - frontend_rescue-network
     healthcheck:
-      # Evita depender de curl: usa wget (busybox) para chequear HTTP
       test: ["CMD-SHELL", "wget -qO- http://localhost:5050/api/health || exit 1"]
       interval: 30s
       timeout: 10s
@@ -54,7 +53,7 @@ services:
       - VERSION=${VERSION}
       - BASE_URL=${BASE_URL}
       - DEBUG=${DEBUG}
-      - REDIS_URL=redis://mqtt-redis-service:6379/1
+      - REDIS_URL=${REDIS_URL}
       - CACHE_DB_PATH=${CACHE_DB_PATH}
       - CACHE_CLEANUP_INTERVAL=${CACHE_CLEANUP_INTERVAL}
       - BULK_MAX_WORKERS=${BULK_MAX_WORKERS}
