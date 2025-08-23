@@ -50,7 +50,13 @@ def pre_fork(server, worker):
     server.log.info("🔄 Worker spawned (pid: %s)", worker.pid)
 
 def post_fork(server, worker):
-    worker.log.info("✅ Worker spawned (pid: %s) - FIFO queue debería iniciarse", worker.pid)
+    worker.log.info("✅ Worker spawned (pid: %s) - iniciando FIFO queue", worker.pid)
+    try:
+        from services.message_queue_service import MessageQueueService
+        MessageQueueService().restart_processor()
+        worker.log.info("✅ Procesador FIFO iniciado en worker %s", worker.pid)
+    except Exception as e:
+        worker.log.warning("No se pudo iniciar el procesador FIFO: %s", e)
 
 def worker_abort(worker):
     worker.log.info("❌ Worker recibió SIGABRT señal")
