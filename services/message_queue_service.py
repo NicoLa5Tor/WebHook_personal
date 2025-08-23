@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 class MessageQueueService:
     _instance = None
     _lock = threading.Lock()
-    _processor_started = False
     
     def __new__(cls):
         if cls._instance is None:
@@ -30,17 +29,33 @@ class MessageQueueService:
         self.processor_thread = None
         self.running = False
         self._initialized = True
-        
+
         logger.info("🚀 MessageQueueService inicializado")
-        
-        # Iniciar procesador de cola en background SOLO UNA VEZ
-        if not MessageQueueService._processor_started:
-            MessageQueueService._processor_started = True
+
+        # Asegurar que el procesador esté activo al inicializar
+        self._ensure_processor_running()
+
+    def _ensure_processor_running(self):
+        """Verifica y reinicia el procesador de cola si no está activo"""
+        if self.processor_thread:
+            thread_alive = self.processor_thread.is_alive()
+            thread_registered = self.processor_thread in threading.enumerate()
+        else:
+            thread_alive = False
+            thread_registered = False
+
+        if not self.processor_thread or not thread_alive or not thread_registered:
+            # Reiniciar flags para permitir nuevo thread
+            self.running = False
+            self.processor_thread = None
             self._start_queue_processor()
     
     def add_message_to_queue(self, message_data: Dict):
         """Añade un mensaje a la cola FIFO para procesamiento"""
         try:
+            # Asegurar que el procesador esté activo
+            self._ensure_processor_running()
+
             # Extraer info básica para logging
             from_number = "unknown"
             message_text = "N/A"
@@ -191,6 +206,9 @@ class MessageQueueService:
     def get_queue_status(self) -> Dict:
         """Obtiene el estado de la cola"""
         try:
+            # Verificar y reiniciar si el procesador no está activo
+            self._ensure_processor_running()
+
             thread_alive = self.processor_thread.is_alive() if self.processor_thread else False
             return {
                 "websocket_available": self.websocket_service.health_check(),
@@ -217,19 +235,24 @@ class MessageQueueService:
     def restart_processor(self) -> Dict:
         """Reinicia el procesador de cola"""
         try:
-            logger.info("🔄 Reiniciando procesador de cola...")
-            self.running = True
-            
-            # Reiniciar el thread del procesador
-            if self.processor_thread and not self.processor_thread.is_alive():
-                self.processor_thread = threading.Thread(target=self._process_queue_loop, daemon=True, name="FIFOProcessor")
-                self.processor_thread.start()
-                logger.info("✅ Procesador de cola reiniciado")
+            logger.info("🔄 Reiniciando procesador de cola (forzado)...")
+
+            # Detener cualquier thread previo
+            self.running = False
+            if self.processor_thread and self.processor_thread.is_alive():
+                self.processor_thread.join(timeout=1)
+
+            # Forzar creación de nuevo thread
+            self.processor_thread = None
+            self._start_queue_processor()
+
+            if self.processor_thread and self.processor_thread.is_alive():
+                logger.info("✅ Procesador de cola operativo")
                 return {"success": True, "message": "Procesador reiniciado"}
             else:
-                logger.info("ℹ️ El procesador ya está corriendo")
-                return {"success": True, "message": "Procesador ya está corriendo"}
-                
+                logger.info("❌ No se pudo reiniciar el procesador")
+                return {"success": False, "message": "No se pudo reiniciar"}
+
         except Exception as e:
             logger.error(f"❌ Error reiniciando procesador: {str(e)}")
             return {"error": str(e)}
