@@ -24,16 +24,19 @@ class MessageQueueService:
         
         self.websocket_service = WebSocketService()
         self.message_queue = queue.Queue()
-        
+
         # Control de threading
         self.processor_thread = None
+        self.supervisor_thread = None
         self.running = False
+        self.supervisor_interval = 5  # segundos entre verificaciones
         self._initialized = True
 
         logger.info("🚀 MessageQueueService inicializado")
 
         # Asegurar que el procesador esté activo al inicializar
         self._ensure_processor_running()
+        self._start_supervisor_thread()
 
     def _ensure_processor_running(self):
         """Verifica y reinicia el procesador de cola si no está activo"""
@@ -103,6 +106,26 @@ class MessageQueueService:
         except Exception as e:
             logger.error(f"❌ Error iniciando procesador de cola: {str(e)}")
             self.running = False
+
+    def _start_supervisor_thread(self):
+        """Inicia un hilo que supervisa el estado del procesador"""
+        if self.supervisor_thread and self.supervisor_thread.is_alive():
+            return
+        self.supervisor_thread = threading.Thread(
+            target=self._supervise_processor,
+            daemon=True,
+            name="FIFOProcessorSupervisor"
+        )
+        self.supervisor_thread.start()
+        logger.info("👁️ Supervisor del procesador iniciado")
+
+    def _supervise_processor(self):
+        """Verifica periódicamente que el procesador esté activo"""
+        while True:
+            time.sleep(self.supervisor_interval)
+            if self.running and (not self.processor_thread or not self.processor_thread.is_alive()):
+                logger.warning("⚠️ Procesador de cola inactivo, reiniciando...")
+                self.restart_processor()
     
     def _process_queue_loop(self):
         """Loop principal del procesador de cola FIFO - UN mensaje a la vez"""
