@@ -7,6 +7,7 @@ networks:
 services:
   rescue-webhook:
     container_name: rescue-webhook
+    image: rescue-webhook
     build:
       context: .
       dockerfile: Dockerfile
@@ -25,8 +26,6 @@ services:
       - BULK_MAX_WORKERS=${BULK_MAX_WORKERS}
       - WHATSAPP_QUEUE_NAME=${WHATSAPP_QUEUE_NAME:-whatsapp_queue}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    ports:
-      - "5050:5050"
     volumes:
       - sqlite_data:/app/data
     networks:
@@ -45,6 +44,7 @@ services:
     restart: unless-stopped
   worker:
     container_name: rescue-worker
+    image: rescue-worker
     build:
       context: .
       dockerfile: Dockerfile.worker
