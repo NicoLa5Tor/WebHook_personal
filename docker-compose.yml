@@ -30,8 +30,12 @@ services:
     volumes:
       - sqlite_data:/app/data
     networks:
-      - global-network
-      - rescue-network
+      global-network:
+        aliases:
+          - rescue-webhook
+      rescue-network:
+        aliases:
+          - rescue-webhook
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/api/health"]
       interval: 30s
@@ -40,6 +44,7 @@ services:
       start_period: 40s
     restart: unless-stopped
   worker:
+    container_name: rescue-worker
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -58,7 +63,9 @@ services:
     volumes:
       - sqlite_data:/app/data
     networks:
-      - global-network
+      global-network:
+        aliases:
+          - rescue-worker
     restart: unless-stopped
 volumes:
   sqlite_data:
