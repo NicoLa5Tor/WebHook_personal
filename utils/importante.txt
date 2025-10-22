@@ -1,5 +1,0 @@
-Cuando el servicio este ya corriendo, no se olviden de ejecutar esto
-# Reiniciar el procesador FIFO manualmente
-curl -s -X POST http://localhost:5050/api/queue/restart | python3 -m json.tool
-esto reinicia la cola de procesamiento y muestra un json con el success del enpoint, esto es necesario ya que con 
-unicorn no se pudo inicializar la cola desde el principio probablemente por temas extra

@@ -24,13 +24,13 @@ wheels/
 .installed.cfg
 *.egg
 PYTHONPATH
-
+AGENTS.md
 # Virtual environments
 venv/
 env/
 ENV/
 .venv/
-.env/
+.env*
 pyvenv.cfg
 
 # Environment variables

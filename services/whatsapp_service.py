@@ -419,7 +419,7 @@ class WhatsAppService:
 
     def send_button_message(self, to: str, header_type: str = None, header_content: str = None,
                            body_text: str = None, buttons: List[Dict] = None, footer_text: str = None) -> Dict:
-        """Envía un mensaje con botones de respuesta"""
+        """Envía un mensaje con botones de respuesta o enlaces"""
         
         if not buttons or len(buttons) == 0:
             return {"success": False, "error": "Se requiere al menos un botón"}
@@ -432,32 +432,47 @@ class WhatsAppService:
             if not isinstance(button, dict):
                 return {"success": False, "error": f"Botón {i+1} debe ser un objeto"}
             
-            if not button.get('id'):
-                return {"success": False, "error": f"Botón {i+1} debe tener un 'id'"}
-            
             if not button.get('title'):
                 return {"success": False, "error": f"Botón {i+1} debe tener un 'title'"}
             
             # Validar longitud del título (máximo 20 caracteres)
             if len(button['title']) > 20:
                 return {"success": False, "error": f"Título del botón {i+1} debe tener máximo 20 caracteres"}
+            
+            button_type = button.get('type', 'reply')
+            if button_type == 'url' and not button.get('url'):
+                return {"success": False, "error": f"Botón {i+1} debe incluir un 'url' para tipo URL"}
+            if button_type != 'url' and not button.get('id'):
+                return {"success": False, "error": f"Botón {i+1} debe tener un 'id'"}
         
         # Estructura del mensaje interactivo con botones
+        interactive_buttons = []
+        for button in buttons:
+            button_type = button.get('type', 'reply')
+            title = button['title']
+
+            if button_type == 'url':
+                interactive_buttons.append({
+                    "type": "url",
+                    "url": button['url'],
+                    "title": title
+                })
+            else:
+                interactive_buttons.append({
+                    "type": "reply",
+                    "reply": {
+                        "id": button["id"],
+                        "title": title
+                    }
+                })
+
         interactive_data = {
             "type": "button",
             "body": {
                 "text": body_text or "Mensaje con botones"
             },
             "action": {
-                "buttons": [
-                    {
-                        "type": "reply",
-                        "reply": {
-                            "id": button["id"],
-                            "title": button["title"]
-                        }
-                    } for button in buttons
-                ]
+                "buttons": interactive_buttons
             }
         }
         
